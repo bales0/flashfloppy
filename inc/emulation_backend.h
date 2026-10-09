@@ -29,6 +29,7 @@
 #define IRQ_12 backend_name(IRQ_12)
 #define IRQ_13 backend_name(IRQ_13)
 #define IRQ_23 backend_name(IRQ_23)
+#define IRQ_27 backend_name(IRQ_27)
 #define IRQ_28 backend_name(IRQ_28)
 #define IRQ_40 backend_name(IRQ_40)
 #define IRQ_43 backend_name(IRQ_43)

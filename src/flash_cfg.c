@@ -22,12 +22,12 @@ const struct ff_cfg dfl_ff_cfg = {
 /* FF.CFG: User-specified values, and defaults where not specified. */
 struct ff_cfg ff_cfg;
 
-/* Seven byte-sized runtime overrides. Base values alone may reach Flash. */
+/* Eight byte-sized runtime overrides. Base values alone may reach Flash. */
 static const uint8_t setting_offsets[SET_nr] = {
     offsetof(struct ff_cfg, step_volume), offsetof(struct ff_cfg, qd_motor_volume),
     offsetof(struct ff_cfg, notify_volume), offsetof(struct ff_cfg, oled_contrast),
-    offsetof(struct ff_cfg, display_off_secs), offsetof(struct ff_cfg, interface),
-    offsetof(struct ff_cfg, qd_ready)
+    offsetof(struct ff_cfg, display_off_secs), offsetof(struct ff_cfg, fdd_interface),
+    offsetof(struct ff_cfg, qd_ready), offsetof(struct ff_cfg, qd_host)
 };
 static uint8_t setting_base[SET_nr], setting_value[SET_nr], setting_mask;
 
@@ -186,16 +186,18 @@ void flash_ff_cfg_read(void)
         printk("Flash Slot %u (ver %u, size %u)\n",
                slot - SLOT_BASE, slot->ff_cfg.version, sz);
         /* Copy over all options that are present in Flash. */
-        if (sz > offsetof(struct ff_cfg, interface))
-            memcpy(&ff_cfg.interface, &slot->ff_cfg.interface,
-                   sz - offsetof(struct ff_cfg, interface));
+        if (sz > offsetof(struct ff_cfg, fdd_interface))
+            memcpy(&ff_cfg.fdd_interface, &slot->ff_cfg.fdd_interface,
+                   sz - offsetof(struct ff_cfg, fdd_interface));
     } else {
         printk("Factory Defaults\n");
     }
     /* Old layouts have no new READY setting; do not reinterpret their bytes. */
-    if (ff_cfg.qd_ready_layout != 0xff || ff_cfg.qd_ready > QD_READY_JC)
+    if (ff_cfg.qd_ready_layout != 0xff || ff_cfg.qd_ready > QD_READY_AUTO)
         ff_cfg.qd_ready = dfl_ff_cfg.qd_ready;
     ff_cfg.qd_ready_layout = 0xff;
+    if (ff_cfg.qd_host > QD_HOST_GENERIC)
+        ff_cfg.qd_host = dfl_ff_cfg.qd_host;
 }
 
 /*

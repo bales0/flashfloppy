@@ -1,7 +1,8 @@
-# Combined FDD and QuickDisk firmware
+# Universal FDD, QuickDisk and Apple II firmware
 
-The `dual` target contains the regular Shugart FDD emulator and the QuickDisk
-emulator in one application. The USB/storage stack, filesystem, navigation,
+The `dual` target contains the regular Shugart FDD emulator, an Apple II phase
+frontend sharing the same FDD core, and the separate QuickDisk backend in one
+application. The USB/storage stack, filesystem, navigation,
 display, configuration, image allocation, buffers and write-flux decoder are
 shared. The specific drive state machines, electrical interface and timing
 remain in separate engines.
@@ -10,9 +11,9 @@ remain in separate engines.
 
 - Power on normally to start the last selected emulation. The default is FDD.
 - Hold the encoder push button (SELECT) while powering on to open the boot menu.
-- Release the button, rotate the encoder to choose **QuickDisk**, **FDD** or
-  **Update FW**, then press it again to confirm. LEFT/RIGHT also navigate.
-- LCD/OLED shows the names; a seven-segment display shows `qd`, `Fdd` and `UPd`.
+- Release the button, rotate the encoder to choose **QuickDisk**, **FDD**,
+  **Apple II** or **Update FW**, then press it again to confirm. LEFT/RIGHT also navigate.
+- LCD/OLED shows the names; a seven-segment display shows `qd`, `Fdd`, `A2`, `UPd`.
 - Choosing an emulation saves it in the existing flash configuration page.
 - Choosing Update FW requests the existing USB update bootloader. Insert a USB
   drive with a matching update file; the menu confirmation starts the update.
@@ -29,21 +30,62 @@ Direct Access mode.
 
 ### Independent QuickDisk READY setting
 
-`qd-ready = standard | motor-off | jc` affects QuickDisk only:
+`qd-ready = auto | standard | motor-off | jc` affects QuickDisk only:
 
+- `auto`: Sharp/Roland select motor-off; Akai/generic select standard.
 - `standard`: Motor-off does not immediately deactivate READY.
 - `motor-off`: Motor-off immediately deactivates READY, as required by
-  Sharp MZ-800/MZ-1F11 and Roland. This is the example configuration default.
+  Sharp MZ-800/MZ-1F11 and Roland.
 - `jc`: Only the physical JC jumper selects the behaviour (open: standard,
   closed: motor-off).
 
-FDD `interface=jc` still selects Shugart with JC open and IBM PC with JC closed.
-Explicit FDD interface values and explicit QD READY values ignore JC. FDD
-`interface=ibmpc` has no effect on QD READY. The previous option has been removed;
-replace it with `qd-ready` in your USB configuration. Older saved READY bytes
-are discarded in favour of the new default, then FF.CFG is applied as usual.
-For a Sharp using both modes, select `interface=shugart` and
-`qd-ready=motor-off`; JC may remain open.
+FDD `fdd-interface=jc` still selects Shugart with JC open and IBM PC with JC closed.
+Explicit FDD interface values and QD standard/motor-off/auto ignore JC.
+FDD `fdd-interface=ibmpc` has no effect on QD READY. Valid saved READY modes
+are retained; invalid values and obsolete READY layouts use the compiled
+default, then FF.CFG is applied as usual.
+For a Sharp using both modes, select `fdd-interface=shugart`, `qd-host=sharp`
+and `qd-ready=auto`; JC may remain open. `auto` chooses motor-off for Sharp
+and Roland, standard for Akai and generic. Explicit READY modes override the
+host; only `qd-ready=jc` consults the physical JC jumper.
+
+Version 3.46 renames the FDD-only interface options to `fdd-interface`,
+`fdd-host`, `fdd-pin02`, `fdd-pin34`, `fdd-max-cyl`,
+`fdd-side-select-glitch-filter`, `fdd-head-settle-ms`, `fdd-motor-delay`,
+and `fdd-chgrst`. Their old unprefixed names are ignored, so update FF.CFG.
+Unknown names leave existing saved/default values unchanged. No section
+parser or legacy-name aliases are added. FDD/Apple STEP sound uses
+`step-volume`; QD spindle sound uses the independent `qd-motor-volume`.
+`write-drain`, `track-change` and `index-suppression` remain common stream
+policies used by both engines. HFE overrides also apply to Apple II HFE images.
+Apple II uses fixed interface defaults and ignores user FDD and QD interface
+settings. It is now a third boot choice in `dual`; standalone Apple II builds
+also remain available.
+
+### Apple II frontend
+
+Apple II lists HFE images only (HFE remains available in FDD mode too). Native
+DO/PO/DSK Apple containers are not supported. The interface uses the existing
+standalone phase decoder and one 1 ms timer: PH0=PA10, PH1=PA9, PH2=PB0,
+PH3=PA1 in production. Debug builds use PA6/PA15 for PH0/PH1 and disable
+the conflicting KC30 rotary header after the Apple frontend is selected.
+WDATA capture alternates edge polarity through its directly bound ISR;
+WRPROT uses Apple polarity and RDATA pulses are 1000 ns (FDD: 400 ns).
+The common image state, DMA pipeline and HFE handler are compiled once.
+
+QFN32 uses PA10 for KC30 SELECT and PA9 for JC in other modes. These pins are
+Apple phase inputs, so Apple mode ignores that SELECT input and never changes
+the JC pin configuration. Use SELECT on PA5 (where present) for the boot menu;
+the PA10 encoder push button is unavailable while the saved mode is Apple II.
+LEFT+RIGHT at power-on still enters recovery update, not the boot menu.
+Install the new
+universal bootloader too: it reads the saved mode before checking SELECT.
+The wiring restrictions also apply to standalone Apple II hardware.
+
+Apple II currently shares FDD's `IMAGE_A.CFG`/`INIT_A.CFG` navigation state;
+the active format filter rejects images unsuitable for the selected mode.
+Global UI/filesystem options, `step-volume` and common HFE options still apply.
+`fdd-*`, `qd-*` and the JC interface policy do not configure the Apple frontend.
 
 The QD motor input remains PA0. The universal wiring uses S0 fitted, S1 and MO
 open, and host QD /MOTOR connected to Gotek pin 10. FDD uses the same PA0 as
@@ -63,20 +105,25 @@ it cannot render the OLED/LCD asterisk.
 
 ### Temporary runtime Settings
 
-With an OLED/LCD, use SELECT on an inserted image, then Eject Menu -> Settings.
-The drive has been cancelled before this menu is opened, in both FDD and QD.
-LEFT/RIGHT or the rotary encoder select items; SELECT enters a submenu/editor
-or accepts the edited value. Back returns to Settings; Exit returns to Eject Menu.
+With an OLED/LCD and USB removed/not mounted, briefly press and release
+SELECT (or LEFT+RIGHT) to open the existing Main Menu. Release before three
+seconds: the existing three-second hold still triggers Factory Reset.
+LEFT/RIGHT or the rotary encoder select items; SELECT opens the shared value
+editor or accepts its value and returns to Main Menu. Exit closes Main Menu.
+There is no Settings entry in Eject Menu and no Sound/Display/Drive hierarchy.
+The flat list includes:
 
-- Sound: FDD Step Volume (0..20), QD Motor Volume (0..20), Notify Volume (0..15,
+- FDD/Apple Volume (0..20), QD Motor Volume (0..20), Notify Volume (0..15,
   preserving the slot-number notification flag).
-- Display: OLED Contrast (0..255; applied on refresh without resetting), Display
+- OLED Contrast (0..255; applied on refresh without resetting), Display
   Timeout (0=off, 1..254 seconds, 255=always on). Menus remain visible even when
   the configured timeout is off. OLED Contrast has no effect on an HD44780 LCD.
-- Drive: FDD Interface (JC, Shugart, IBM PC, IBM PC+HD, Japanese PC,
-  Japanese PC+HD, Amiga), QD READY Mode (Standard, Motor Off, JC).
+- FDD Interface (JC, Shugart, IBM PC, IBM PC+HD, Japanese PC,
+  Japanese PC+HD, Amiga), QD READY Mode (Auto, Standard, Motor Off, JC), QD Host (Sharp, Roland, Akai, Generic).
+- The existing MCU Info, Factory Reset, Update Firmware, Configure FF OSD,
+  and Exit service entries.
 
-All seven settings are RAM overrides until reset/power-on. They never update
+All eight settings are RAM overrides until reset/power-on. They never update
 FF.CFG, another settings file, or internal Flash. Normal configuration writes
 exclude the RAM overrides, including if FF.CFG is reloaded after USB reconnect.
 Overrides survive reconnect and HxC settings cannot replace overridden volume
@@ -90,12 +137,13 @@ FDD/QD backend selection and service menu items are unchanged.
    reads and formats as before. Keep logical QD/MZQ/QDF write-protected.
 2. With JC both open and closed, test explicit `qd-ready=standard` and
    `motor-off`. Then test `jc`: open selects standard, closed motor-off.
-   Changing FDD `interface=ibmpc` must not change QD READY.
-3. In FDD, test `interface=jc` (open Shugart, closed IBM PC) and explicit
+   Changing FDD `fdd-interface=ibmpc` must not change QD READY.
+3. In FDD, test `fdd-interface=jc` (open Shugart, closed IBM PC) and explicit
    Shugart/IBM PC with either JC state. Check image navigation, encoder,
    head-step sound and eject/reinsert.
-4. In both backends, enter SELECT -> Settings; edit every item, return via Back
-   and Exit, reinsert and confirm the changes. Check contrast without a reset,
+4. In both backends, remove USB and briefly press/release SELECT for Main Menu.
+   Edit every setting, Exit, reconnect USB and confirm the changes.
+   Check contrast without a reset,
    timeout off/seconds/always-on and notification slot-number preservation.
 5. Reconnect USB and confirm overrides remain; reset and confirm FF.CFG values
    return. Compare the USB configuration files before/after Settings.

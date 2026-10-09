@@ -44,6 +44,12 @@
 
 #include "boot_policy.h"
 
+bool_t emulation_is_apple2(void)
+{
+    return *(const uint32_t *)(FIRMWARE_START + 7*4) == DUAL_FW_MAGIC
+        && ff_cfg.boot_emulation == EMULATION_APPLE2;
+}
+
 int EXC_reset(void) __attribute__((alias("main")));
 
 static uint8_t USBH_Cfg_Rx_Buffer[512];
@@ -419,6 +425,7 @@ int main(void)
     stm32_init();
     time_init();
     console_init();
+    flash_ff_cfg_read();
     board_init();
 
     printk("\n** FF Update Bootloader %s\n", fw_ver);
@@ -434,8 +441,6 @@ int main(void)
     }
 
     delay_ms(200); /* 5v settle */
-
-    flash_ff_cfg_read();
 
     display_init();
     switch (display_type) {

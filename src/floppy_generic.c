@@ -79,6 +79,11 @@ static void floppy_init_irqs(void)
 
     /* Configure physical interface interrupts. */
     for (i = 0, e = exti_irqs; i < ARRAY_SIZE(exti_irqs); i++, e++) {
+#ifdef DUAL_FDD
+        if ((e->irq == 27 && !emulation_is_apple2())
+            || (e->irq == 28 && emulation_is_apple2()))
+            continue;
+#endif
         IRQx_set_prio(e->irq, e->pri);
         if (e->pr_mask != 0) {
             /* Do not trigger an initial interrupt on this line. Clear EXTI_PR
@@ -95,6 +100,11 @@ static void floppy_init_irqs(void)
 
     /* Enable physical interface interrupts. */
     for (i = 0, e = exti_irqs; i < ARRAY_SIZE(exti_irqs); i++, e++) {
+#ifdef DUAL_FDD
+        if ((e->irq == 27 && !emulation_is_apple2())
+            || (e->irq == 28 && emulation_is_apple2()))
+            continue;
+#endif
         IRQx_enable(e->irq);
     }
 }
@@ -134,11 +144,7 @@ static void timer_dma_init(void)
     tim_rdata->ccmr1 = (TIM_CCMR1_CC2S(TIM_CCS_OUTPUT) |
                         TIM_CCMR1_OC2M(TIM_OCM_PWM1));
     tim_rdata->ccer = TIM_CCER_CC2E | ((O_TRUE==0) ? TIM_CCER_CC2P : 0);
-#if TARGET == TARGET_apple2
-    tim_rdata->ccr2 = sampleclk_ns(1000);
-#else
-    tim_rdata->ccr2 = sampleclk_ns(400);
-#endif
+    tim_rdata->ccr2 = emulation_is_apple2() ? sampleclk_ns(1000) : sampleclk_ns(400);
     tim_rdata->dier = TIM_DIER_UDE;
     tim_rdata->cr2 = 0;
 

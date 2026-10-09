@@ -77,9 +77,14 @@ static const struct image_type qd_image_types[] = {
     { "", NULL }
 };
 
+static const struct image_type apple_image_types[] = {
+    { "hfe", &hfe_image_handler }, { "", NULL }
+};
+
 const struct image_type *image_types(void)
 {
-    return emulation_is_qd() ? qd_image_types : image_type;
+    return emulation_is_qd() ? qd_image_types
+        : emulation_is_apple2() ? apple_image_types : image_type;
 }
 #endif
 
@@ -120,10 +125,10 @@ bool_t image_valid(FILINFO *fp)
 
     /* Check valid extension. */
     filename_extension(fp->fname, ext, sizeof(ext));
-    if (!emulation_is_qd()
+    if (!emulation_is_qd() && !emulation_is_apple2()
         && (TARGET == TARGET_shugart || TARGET == TARGET_dual)
         && !strcmp(ext, "adf")) {
-        return (ff_cfg.host == HOST_acorn) || !(fp->fsize % (2*11*512));
+        return (ff_cfg.fdd_host == HOST_acorn) || !(fp->fsize % (2*11*512));
     } else {
         const struct image_type *type;
         for (type = image_types(); type->handler != NULL; type++)
@@ -181,6 +186,11 @@ void image_open(struct image *im, struct slot *slot, DWORD *cltbl)
     int i;
 
 #if TARGET == TARGET_dual
+    if (emulation_is_apple2()) {
+        if (try_handler(im, slot, cltbl, &hfe_image_handler))
+            return;
+        F_die(FR_BAD_IMAGE);
+    }
     if (emulation_is_qd()) {
         if (try_handler(im, slot, cltbl, &qd_image_handler))
             return;
@@ -201,7 +211,7 @@ void image_open(struct image *im, struct slot *slot, DWORD *cltbl)
     hint = type->handler;
 
     /* Apply host-specific overrides to the hint. */
-    switch (ff_cfg.host) {
+    switch (ff_cfg.fdd_host) {
     case HOST_acorn:
         if (hint == &adf_image_handler)
             hint = &adfs_image_handler;

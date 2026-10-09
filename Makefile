@@ -1,6 +1,6 @@
 
 PROJ := flashfloppy
-VER := 3.45-dual
+VER := 3.46
 
 export FW_VER := $(VER)
 

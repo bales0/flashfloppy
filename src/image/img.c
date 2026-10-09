@@ -546,7 +546,7 @@ static bool_t img_open(struct image *im)
     if (tag_open(im, dot ? dot+1 : NULL))
         return TRUE;
 
-    switch (ff_cfg.host) {
+    switch (ff_cfg.fdd_host) {
     case HOST_akai:
     case HOST_gem:
         type = akai_type;

@@ -993,8 +993,8 @@ static bool_t read_ff_cfg(void)
 
             /* DRIVE EMULATION */
 
-        case FFCFG_interface:
-            ff_cfg.interface =
+        case FFCFG_fdd_interface:
+            ff_cfg.fdd_interface =
                 !strcmp(opts.arg, "shugart") ? FINTF_SHUGART
                 : !strcmp(opts.arg, "ibmpc") ? FINTF_IBMPC
                 : !strcmp(opts.arg, "ibmpc-hdout") ? FINTF_IBMPC_HDOUT
@@ -1005,13 +1005,20 @@ static bool_t read_ff_cfg(void)
                 : FINTF_JC;
             break;
 
-        case FFCFG_qd_ready:
-            ff_cfg.qd_ready = !strcmp(opts.arg, "standard") ? QD_READY_STANDARD
-                : !strcmp(opts.arg, "jc") ? QD_READY_JC : QD_READY_MOTOR_OFF;
+        case FFCFG_qd_host:
+            ff_cfg.qd_host = !strcmp(opts.arg, "roland") ? QD_HOST_ROLAND
+                : !strcmp(opts.arg, "akai") ? QD_HOST_AKAI
+                : !strcmp(opts.arg, "generic") ? QD_HOST_GENERIC : QD_HOST_SHARP;
             break;
 
-        case FFCFG_host:
-            ff_cfg.host =
+        case FFCFG_qd_ready:
+            ff_cfg.qd_ready = !strcmp(opts.arg, "standard") ? QD_READY_STANDARD
+                : !strcmp(opts.arg, "motor-off") ? QD_READY_MOTOR_OFF
+                : !strcmp(opts.arg, "jc") ? QD_READY_JC : QD_READY_AUTO;
+            break;
+
+        case FFCFG_fdd_host:
+            ff_cfg.fdd_host =
                 !strcmp(opts.arg, "acorn") ? HOST_acorn
                 : !strcmp(opts.arg, "akai") ? HOST_akai
                 : !strcmp(opts.arg, "casio") ? HOST_casio
@@ -1031,24 +1038,24 @@ static bool_t read_ff_cfg(void)
                 : HOST_unspecified;
             break;
 
-        case FFCFG_pin02:
-            ff_cfg.pin02 = parse_pin_str(opts.arg);
+        case FFCFG_fdd_pin02:
+            ff_cfg.fdd_pin02 = parse_pin_str(opts.arg);
             break;
 
-        case FFCFG_pin34:
-            ff_cfg.pin34 = parse_pin_str(opts.arg);
+        case FFCFG_fdd_pin34:
+            ff_cfg.fdd_pin34 = parse_pin_str(opts.arg);
             break;
 
         case FFCFG_write_protect:
             ff_cfg.write_protect = !strcmp(opts.arg, "yes");
             break;
 
-        case FFCFG_max_cyl:
-            ff_cfg.max_cyl = strtol(opts.arg, NULL, 10);
+        case FFCFG_fdd_max_cyl:
+            ff_cfg.fdd_max_cyl = strtol(opts.arg, NULL, 10);
             break;
 
-        case FFCFG_side_select_glitch_filter:
-            ff_cfg.side_select_glitch_filter = strtol(opts.arg, NULL, 10);
+        case FFCFG_fdd_side_select_glitch_filter:
+            ff_cfg.fdd_side_select_glitch_filter = strtol(opts.arg, NULL, 10);
             break;
 
         case FFCFG_track_change:
@@ -1068,18 +1075,18 @@ static bool_t read_ff_cfg(void)
             ff_cfg.index_suppression = !strcmp(opts.arg, "yes");
             break;
 
-        case FFCFG_head_settle_ms:
-            ff_cfg.head_settle_ms = strtol(opts.arg, NULL, 10);
+        case FFCFG_fdd_head_settle_ms:
+            ff_cfg.fdd_head_settle_ms = strtol(opts.arg, NULL, 10);
             break;
 
-        case FFCFG_motor_delay:
-            ff_cfg.motor_delay =
+        case FFCFG_fdd_motor_delay:
+            ff_cfg.fdd_motor_delay =
                 !strcmp(opts.arg, "ignore") ? MOTOR_ignore
                 : (strtol(opts.arg, NULL, 10) + 9) / 10;
             break;
 
-        case FFCFG_chgrst:
-            ff_cfg.chgrst =
+        case FFCFG_fdd_chgrst:
+            ff_cfg.fdd_chgrst =
                 !strncmp(opts.arg, "delay-", 6)
                   ? CHGRST_delay(strtol(opts.arg+6, NULL, 10))
                 : !strcmp(opts.arg, "pa14") ? CHGRST_pa14
@@ -1364,31 +1371,30 @@ static bool_t read_ff_cfg(void)
 
 static void process_ff_cfg_opts(const struct ff_cfg *old)
 {
-    /* chgrst, motor-delay: Reset EXTI handlers. */
-    if ((ff_cfg.motor_delay != old->motor_delay)
-        || (ff_cfg.chgrst != old->chgrst)) {
-        exti->imr &= ~motor_chgrst_exti_mask;
-        motor_chgrst_exti_mask = 0;
-    }
+    if (!emulation_is_qd() && !emulation_is_apple2()) {
+        /* chgrst, motor-delay: Reset EXTI handlers. */
+        if ((ff_cfg.fdd_motor_delay != old->fdd_motor_delay)
+            || (ff_cfg.fdd_chgrst != old->fdd_chgrst)) {
+            exti->imr &= ~motor_chgrst_exti_mask;
+            motor_chgrst_exti_mask = 0;
+        }
 
-    /* rotary, chgrst, motor-delay: Inform the rotary-encoder subsystem. 
-     * It is harmless to reset rotary EXTI handlers unconditionally. */
+        /* interface, pin02, pin34, chgrst, motor-delay: Inform the floppy
+         * subsystem.  */
+        if ((ff_cfg.fdd_interface != old->fdd_interface)
+            || (ff_cfg.fdd_pin02 != old->fdd_pin02)
+            || (ff_cfg.fdd_pin34 != old->fdd_pin34)
+            || (ff_cfg.fdd_motor_delay != old->fdd_motor_delay)
+            || (ff_cfg.fdd_chgrst != old->fdd_chgrst)) {
+            floppy_set_fintf_mode();
+            motor_chgrst_setup_exti();
+        }
+
+        /* max-cyl: Inform the floppy subsystem. */
+        if (ff_cfg.fdd_max_cyl != old->fdd_max_cyl)
+            floppy_set_max_cyl();
+    }
     set_rotary_exti();
-
-    /* interface, pin02, pin34, chgrst, motor-delay: Inform the floppy
-     * subsystem.  */
-    if ((ff_cfg.interface != old->interface)
-        || (ff_cfg.pin02 != old->pin02)
-        || (ff_cfg.pin34 != old->pin34)
-        || (ff_cfg.motor_delay != old->motor_delay)
-        || (ff_cfg.chgrst != old->chgrst)) {
-        floppy_set_fintf_mode();
-        motor_chgrst_setup_exti();
-    }
-
-    /* max-cyl: Inform the floppy subsystem. */
-    if (ff_cfg.max_cyl != old->max_cyl)
-        floppy_set_max_cyl();
 
     /* ejected-on-startup: Set the ejected state appropriately. */
     if (ff_cfg.ejected_on_startup)
@@ -2491,126 +2497,12 @@ static bool_t image_delete(void)
     return ok;
 }
 
-/* Settings are entered only after floppy_cancel(), with media ejected. */
-static const char *const setting_names[SET_nr] = {
-    "FDD Step Volume", "QD Motor Volume", "Notify Volume", "OLED Contrast",
-    "Display Timeout", "FDD Interface", "QD READY Mode"
-};
-static const char *const interface_names[] = {
-    "Shugart", "IBM PC", "IBM PC + HD", "Japanese PC", "Japanese PC+HD", "Amiga",
-    "JC"
-};
-static const char *const ready_names[] = { "Standard", "Motor Off", "JC" };
-
-static void settings_edit(unsigned int item)
-{
-    char msg[17];
-    uint8_t b, stored, value, limit;
-
-    for (;;) {
-        stored = *runtime_setting(item);
-        value = stored;
-        limit = 255;
-        if (item <= SET_motor)
-            limit = 20;
-        else if (item == SET_notify) {
-            value &= NOTIFY_volume_mask;
-            limit = NOTIFY_volume_mask;
-        } else if (item == SET_interface) {
-            value = stored == FINTF_JC ? 6 : stored;
-            limit = 6;
-        } else if (item == SET_ready)
-            limit = QD_READY_JC;
-        value = min(value, limit);
-
-        if (item == SET_interface)
-            snprintf(msg, sizeof(msg), "%s", interface_names[value]);
-        else if (item == SET_ready)
-            snprintf(msg, sizeof(msg), "%s", ready_names[value]);
-        else if (item == SET_timeout && (!value || value == 255))
-            snprintf(msg, sizeof(msg), "%s", value ? "Always On" : "Off");
-        else
-            snprintf(msg, sizeof(msg), "%u%s", value,
-                     item == SET_timeout ? " sec" : "");
-        lcd_write(0, 0, -1, setting_names[item]);
-        lcd_write(0, 1, -1, msg);
-        lcd_on();
-        while (buttons)
-            delay_ms(1);
-        b = menu_wait_button(TRUE, "SET");
-        if (b & B_SELECT) {
-            while (buttons)
-                delay_ms(1);
-            return;
-        }
-        if (!(b & (B_LEFT | B_RIGHT)))
-            continue;
-        if (b & B_LEFT)
-            value = value ? value - 1 : limit;
-        else
-            value = value == limit ? 0 : value + 1;
-
-        if (item == SET_notify)
-            value |= stored & ~NOTIFY_volume_mask;
-        else if (item == SET_interface && value == 6)
-            value = FINTF_JC;
-        runtime_setting_set(item, value);
-        if (item == SET_motor)
-            speaker_motor_refresh();
-        else if (item == SET_interface && !emulation_is_qd())
-            floppy_set_fintf_mode();
-    }
-}
-
-static void settings_menu(void)
-{
-    static const char *const groups[] = { "Sound", "Display", "Drive", "Exit" };
-    static const uint8_t first[] = { 0, SET_step, SET_contrast, SET_interface };
-    static const uint8_t count[] = { 4, 3, 2, 2 };
-    uint8_t b;
-    unsigned int group = 0, sel = 0;
-    const char *label;
-
-    for (;;) {
-        label = !group ? groups[sel] : sel == count[group] ? "Back"
-            : setting_names[first[group] + sel];
-        lcd_write(0, 0, -1, group ? groups[group-1] : "Settings (RAM)");
-        lcd_write(0, 1, -1, label);
-        lcd_on();
-        while (buttons)
-            delay_ms(1);
-        b = menu_wait_button(TRUE, "SET");
-        if (b & B_SELECT) {
-            while (buttons)
-                delay_ms(1);
-            if (!group) {
-                if (sel == 3)
-                    return;
-                group = sel + 1;
-                sel = 0;
-            } else if (sel == count[group]) {
-                sel = group - 1;
-                group = 0;
-            } else {
-                settings_edit(first[group] + sel);
-            }
-        } else {
-            unsigned int last = group ? count[group] : 3;
-            if (b & B_LEFT)
-                sel = sel ? sel - 1 : last;
-            else if (b & B_RIGHT)
-                sel = sel == last ? 0 : sel + 1;
-        }
-    }
-}
-
 enum {
     EJM_header = 0,
     EJM_wrprot,
     EJM_copy,
     EJM_paste,
     EJM_delete,
-    EJM_settings,
     EJM_exit_to_selector,
     EJM_exit_reinsert,
     EJM_nr
@@ -2636,7 +2528,6 @@ static uint8_t noinline eject_menu(uint8_t b)
         [EJM_copy]   = "Copy",
         [EJM_paste]  = "Paste",
         [EJM_delete] = "Delete",
-        [EJM_settings] = "Settings",
         [EJM_exit_to_selector] = "Exit to Selector",
         [EJM_exit_reinsert] = "Exit & Re-Insert",
     };
@@ -2745,10 +2636,6 @@ static uint8_t noinline eject_menu(uint8_t b)
                     break;
                 b = 0xff; /* selector */
                 goto out;
-            case EJM_settings:
-                settings_menu();
-                display_write_slot(TRUE);
-                break;
             case EJM_exit_to_selector:
                 display_write_slot(TRUE);
                 b = 0xff; /* selector */
@@ -3104,16 +2991,89 @@ static void ff_osd_configure(void)
     }
 }
 
+/* Runtime editing is available from Main Menu, without a mounted volume. */
+static const char *const main_menu_names[] = {
+    "FDD/Apple Volume", "QD Motor Volume", "Notify Volume", "OLED Contrast",
+    "Display Timeout", "FDD Interface", "QD READY Mode", "QD Host",
+    "MCU Info", "Factory Reset", "Update Firmware", "Configure FF OSD", "Exit"
+};
+static const char *const interface_names[] = {
+    "Shugart", "IBM PC", "IBM PC + HD", "Japanese PC+HD", "Amiga", "Japanese PC",
+    "JC"
+};
+static const char *const ready_names[] = { "Standard", "Motor Off", "JC", "Auto" };
+
+static const char *const qd_host_names[] = { "Sharp", "Roland", "Akai", "Generic" };
+
+static void settings_edit(unsigned int item)
+{
+    char msg[17];
+    uint8_t b, stored, value, limit;
+
+    for (;;) {
+        stored = *runtime_setting(item);
+        value = stored;
+        limit = 255;
+        if (item <= SET_motor)
+            limit = 20;
+        else if (item == SET_notify) {
+            value &= NOTIFY_volume_mask;
+            limit = NOTIFY_volume_mask;
+        } else if (item == SET_interface) {
+            value = stored == FINTF_JC ? 6 : stored;
+            limit = 6;
+        } else if (item == SET_ready)
+            limit = QD_READY_AUTO;
+        else if (item == SET_qd_host)
+            limit = QD_HOST_GENERIC;
+        value = min(value, limit);
+
+        if (item == SET_interface)
+            snprintf(msg, sizeof(msg), "%s", interface_names[value]);
+        else if (item == SET_ready)
+            snprintf(msg, sizeof(msg), "%s", ready_names[value]);
+        else if (item == SET_qd_host)
+            snprintf(msg, sizeof(msg), "%s", qd_host_names[value]);
+        else if (item == SET_timeout && (!value || value == 255))
+            snprintf(msg, sizeof(msg), "%s", value ? "Always On" : "Off");
+        else
+            snprintf(msg, sizeof(msg), "%u%s", value,
+                     item == SET_timeout ? " sec" : "");
+        lcd_write(0, 0, -1, main_menu_names[item]);
+        lcd_write(0, 1, -1, msg);
+        lcd_on();
+        while (buttons)
+            delay_ms(1);
+        while ((b = buttons) == 0)
+            delay_ms(1);
+        b = wait_twobutton_press(b);
+        if (b & B_SELECT) {
+            while (buttons)
+                delay_ms(1);
+            return;
+        }
+        if (!(b & (B_LEFT | B_RIGHT)))
+            continue;
+        if (b & B_LEFT)
+            value = value ? value - 1 : limit;
+        else
+            value = value == limit ? 0 : value + 1;
+
+        if (item == SET_notify)
+            value |= stored & ~NOTIFY_volume_mask;
+        else if (item == SET_interface && value == 6)
+            value = FINTF_JC;
+        runtime_setting_set(item, value);
+        if (item == SET_motor)
+            speaker_motor_refresh();
+        else if (item == SET_interface && !emulation_is_qd()
+                 && !emulation_is_apple2())
+            floppy_set_fintf_mode();
+    }
+}
+
 static void main_menu(void)
 {
-    const static char *menu[] = {
-        "MCU Info",
-        "Factory Reset",
-        "Update Firmware",
-        "Configure FF OSD",
-        "Exit",
-    };
-
     int sel = 0;
     uint8_t b;
 
@@ -3126,12 +3086,12 @@ static void main_menu(void)
     for (;;) {
 
         if (sel < 0)
-            sel += ARRAY_SIZE(menu);
-        if (sel >= ARRAY_SIZE(menu))
-            sel -= ARRAY_SIZE(menu);
+            sel += ARRAY_SIZE(main_menu_names);
+        if (sel >= ARRAY_SIZE(main_menu_names))
+            sel -= ARRAY_SIZE(main_menu_names);
 
         lcd_write(0, 0, -1, "**Main Menu**");
-        lcd_write(0, 1, -1, menu[sel]);
+        lcd_write(0, 1, -1, main_menu_names[sel]);
         lcd_on();
 
         /* Wait for buttons to be released. */
@@ -3152,7 +3112,11 @@ static void main_menu(void)
             /* Wait for buttons to be released. */
             while (buttons)
                 continue;
-            switch (sel) {
+            if (sel < SET_nr) {
+                settings_edit(sel);
+                continue;
+            }
+            switch (sel - SET_nr) {
             case 0: /* MCU Info */
                 mcu_info();
                 break;
@@ -3207,7 +3171,8 @@ static void noinline banner(void)
         display_mode = DM_banner; /* double height row 0 */
 #if TARGET == TARGET_dual
         lcd_write(0, 0, 0, emulation_is_qd()
-                  ? "FlashFloppy QD" : "FlashFloppy FDD");
+                  ? "FlashFloppy QD" : emulation_is_apple2()
+                  ? "FlashFloppy A2" : "FlashFloppy FDD");
 #if LEVEL == LEVEL_logfile
         snprintf(msg[1], sizeof(msg[1]), "%s Log", fw_ver);
 #else
@@ -3350,9 +3315,9 @@ static void handle_errors(FRESULT fres)
 #if TARGET == TARGET_dual
 static void boot_emulation_menu(void)
 {
-    static const char * const choices[] = { "QuickDisk", "FDD", "Update FW" };
-    static const char * const led_choices[] = { "qd", "Fdd", "UPd" };
-    int sel = emulation_is_qd() ? 0 : 1;
+    static const char * const choices[] = { "QuickDisk", "FDD", "Apple II", "Update FW" };
+    static const char * const led_choices[] = { "qd", "Fdd", "A2", "UPd" };
+    int sel = emulation_is_qd() ? 0 : emulation_is_apple2() ? 2 : 1;
     uint8_t b;
 
     display_mode = DM_menu;
@@ -3376,18 +3341,19 @@ static void boot_emulation_menu(void)
         if (b & B_SELECT) {
             while (buttons)
                 delay_ms(1);
-            if (sel == 2)
+            if (sel == 3)
                 update_firmware();
-            ff_cfg.boot_emulation = (sel == 0) ? EMULATION_QD : EMULATION_FDD;
+            ff_cfg.boot_emulation = (sel == 0) ? EMULATION_QD
+                : (sel == 2) ? EMULATION_APPLE2 : EMULATION_FDD;
             arena_init();
             flash_ff_cfg_update(arena_alloc(128));
             emulation_select(ff_cfg.boot_emulation);
             break;
         }
         if (b & B_LEFT)
-            sel = (sel + 2) % 3;
+            sel = (sel + 3) % 4;
         else if (b & B_RIGHT)
-            sel = (sel + 1) % 3;
+            sel = (sel + 1) % 4;
         while (buttons)
             delay_ms(1);
     }
@@ -3433,11 +3399,11 @@ int main(void)
     flash_ff_cfg_read();
 
 #if TARGET == TARGET_dual
+    emulation_select(ff_cfg.boot_emulation);
     /* Read the physical SELECT input before ordinary UI button handling. */
     boot_menu = (_reset_flag == RESET_FLAG_BOOT_MENU)
         || !!(board_get_buttons() & B_SELECT);
     _reset_flag = 0;
-    emulation_select(ff_cfg.boot_emulation);
     display_init();
     rotary = board_get_rotary();
     timer_init(&button_timer, button_timer_fn, NULL);

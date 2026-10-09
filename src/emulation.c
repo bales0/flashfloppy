@@ -17,7 +17,7 @@ void emulation_select(uint8_t mode)
 {
     /* Called only at boot, before enabling any interface IRQ or DMA. */
     uint32_t oldpri = IRQ_save(TIMER_IRQ_PRI);
-    emulation_mode = (mode == EMULATION_QD) ? EMULATION_QD : EMULATION_FDD;
+    emulation_mode = mode <= EMULATION_APPLE2 ? mode : EMULATION_FDD;
     active = emulation_is_qd() ? &qd_emulation_ops : &fdd_emulation_ops;
     memcpy(emulation_vectors, vector_table, sizeof(emulation_vectors));
     active->bind_irqs(emulation_vectors);

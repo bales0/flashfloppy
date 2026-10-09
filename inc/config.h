@@ -35,7 +35,7 @@ struct packed ff_cfg {
     uint8_t size;
     /* interface: FINTF_* interface mode */
 #define FINTF_JC 255 /* mode specified by jumper JC */
-    uint8_t interface; /* FINTF_* interface mode */
+    uint8_t fdd_interface; /* FINTF_* interface mode */
     char da_report_version[16]; 
     uint8_t autoselect_file_secs;
     uint8_t autoselect_folder_secs;
@@ -50,7 +50,7 @@ struct packed ff_cfg {
 #define FONT_8x16 8
     uint8_t oled_font; /* FONT_* oled font specifier */
     uint8_t step_volume;
-    uint8_t side_select_glitch_filter;
+    uint8_t fdd_side_select_glitch_filter;
     bool_t ejected_on_startup;
 #define IMGS_last   0
 #define IMGS_static 1
@@ -89,7 +89,7 @@ struct packed ff_cfg {
 #define HOST_nascom     15
 #define HOST_casio      16
 #define HOST_ibm_3174   17
-    uint8_t host;
+    uint8_t fdd_host;
     /* Bitfields within display_type field. */
 #define DISPLAY_auto     0
 #define DISPLAY_lcd      (1<<0)
@@ -136,8 +136,8 @@ struct packed ff_cfg {
 #define PIN_nrdy   (PIN_rdy | PIN_invert)
 #define PIN_ndens  (PIN_dens | PIN_invert)
 #define PIN_nchg   (PIN_chg | PIN_invert)
-    uint8_t pin02, pin34;
-    uint8_t head_settle_ms;
+    uint8_t fdd_pin02, fdd_pin34;
+    uint8_t fdd_head_settle_ms;
     uint8_t oled_contrast;
     char indexed_prefix[8];
     uint8_t _unused; /* never been used */
@@ -146,7 +146,7 @@ struct packed ff_cfg {
 #define SORT_small  2
     uint8_t folder_sort;
 #define MOTOR_ignore 0xff
-    uint8_t motor_delay; /* / 10ms */
+    uint8_t fdd_motor_delay; /* / 10ms */
 #define SORTPRI_folders 0
 #define SORTPRI_files   1
 #define SORTPRI_none    2
@@ -154,7 +154,7 @@ struct packed ff_cfg {
 #define CHGRST_step   0xff
 #define CHGRST_pa14   0x8e
 #define CHGRST_delay(x) (x)
-    uint8_t chgrst;
+    uint8_t fdd_chgrst;
 #define DORD_default 0xffff
 #define DORD_shift   4
 #define DORD_row     7
@@ -164,7 +164,7 @@ struct packed ff_cfg {
 #define WDRAIN_realtime 1
 #define WDRAIN_eot      2
     uint8_t write_drain;
-    uint8_t max_cyl;
+    uint8_t fdd_max_cyl;
     uint16_t osd_display_order;
     uint8_t osd_columns;
 #define NOTIFY_volume_mask 15
@@ -179,15 +179,32 @@ struct packed ff_cfg {
 #define QD_READY_STANDARD  0
 #define QD_READY_MOTOR_OFF 1
 #define QD_READY_JC        2
-    uint8_t qd_ready; /* QD-only READY behaviour, independent of FDD interface. */
+#define QD_READY_AUTO      3
+    uint8_t qd_ready; /* QD-only READY policy. */
+#define QD_HOST_SHARP   0
+#define QD_HOST_ROLAND  1
+#define QD_HOST_AKAI    2
+#define QD_HOST_GENERIC 3
+    uint8_t qd_host;
+
 };
 
 extern struct ff_cfg ff_cfg;
 extern const struct ff_cfg dfl_ff_cfg;
 
+/* Apple II uses fixed interface defaults, never user FDD settings. */
+#if TARGET == TARGET_apple2
+#define FDD_CFG(field) (dfl_ff_cfg.fdd_##field)
+#elif TARGET == TARGET_dual || defined(DUAL_FDD)
+#define FDD_CFG(field) (emulation_is_apple2() ? dfl_ff_cfg.fdd_##field \
+                        : ff_cfg.fdd_##field)
+#else
+#define FDD_CFG(field) (ff_cfg.fdd_##field)
+#endif
+
 enum {
     SET_step, SET_motor, SET_notify, SET_contrast, SET_timeout,
-    SET_interface, SET_ready, SET_nr
+    SET_interface, SET_ready, SET_qd_host, SET_nr
 };
 uint8_t *runtime_setting(unsigned int item);
 bool_t runtime_setting_active(unsigned int item);

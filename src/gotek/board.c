@@ -84,6 +84,10 @@ unsigned int board_get_buttons(void)
         x &= _rbit32(gpioc->idr) >> 23;
     x = ~x & 7;
 
+#if TARGET == TARGET_dual || TARGET == TARGET_bootloader
+    if (emulation_is_apple2() && mcu_package == MCU_QFN32)
+        return x;
+#endif
 #if (TARGET == TARGET_apple2) || defined(APPLE2_BOOTLOADER)
     /* Apple 2: QFN32 select pin PA10 is reassigned as stepper phase #0. */
     if (mcu_package == MCU_QFN32)
@@ -105,7 +109,7 @@ unsigned int board_get_rotary(void)
 {
     unsigned int x = 3;
     if ((mcu_package != MCU_QFN32)
-        && (emulation_is_qd() || (ff_cfg.chgrst != CHGRST_pa14))) {
+        && (emulation_is_qd() || (FDD_CFG(chgrst) != CHGRST_pa14))) {
         /* Alternative location at PA13, PA14. */
         x &= gpioa->idr >> 13;
     }
@@ -127,7 +131,7 @@ void board_setup_rotary_exti(void)
 {
     uint32_t m = 0;
     if ((mcu_package != MCU_QFN32)
-        && (emulation_is_qd() || (ff_cfg.chgrst != CHGRST_pa14))) {
+        && (emulation_is_qd() || (FDD_CFG(chgrst) != CHGRST_pa14))) {
         /* Alternative location at PA13, PA14. */
         exti_route_pa(13);
         exti_route_pa(14);
@@ -140,7 +144,7 @@ void board_setup_rotary_exti(void)
         m |= m(10) | m(11);
     }
     if (((has_kc30_header == 1)
-         && (emulation_is_qd() || (ff_cfg.motor_delay == MOTOR_ignore)))
+         && (emulation_is_qd() || (FDD_CFG(motor_delay) == MOTOR_ignore)))
         || (has_kc30_header == 2) /* No conflict with motor on PB12 */) {
         /* KC30 rotary pins PA6, PA15. */
         exti_route_pa(6);
@@ -155,6 +159,8 @@ void board_setup_rotary_exti(void)
 
 void board_jc_set_mode(unsigned int mode)
 {
+    if (emulation_is_apple2() && mcu_package == MCU_QFN32)
+        return;
     if (mcu_package == MCU_QFN32) {
 #if LEVEL == LEVEL_debug
         /* PA9 is used for serial tx */
@@ -291,14 +297,16 @@ void board_init(void)
 
     }
 
-#if TARGET == TARGET_apple2
+#if TARGET == TARGET_dual || TARGET == TARGET_apple2
 #if LEVEL != LEVEL_debug
     /* Normal build: Two phases use UART RX/TX. */
     pa_skip |= m(9) | m(10);
 #else
     /* Debug build: Move the two UART phases to the KC30 header. */
     pa_skip |= m(6) | m(15);
+#if TARGET == TARGET_apple2
     has_kc30_header = 0;
+#endif
 #endif
 #endif
 

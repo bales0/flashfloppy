@@ -16,11 +16,7 @@
 #define sampleclk_stk(x) ((x) * (SAMPLECLK_MHZ / STK_MHZ))
 #define stk_sampleclk(x) ((x) / (SAMPLECLK_MHZ / STK_MHZ))
 
-#if TARGET == TARGET_apple2
-#define WDATA_TOGGLE TRUE
-#else
-#define WDATA_TOGGLE FALSE
-#endif
+#define WDATA_TOGGLE (emulation_is_apple2())
 
 #define FINTF_SHUGART     0
 #define FINTF_IBMPC       1

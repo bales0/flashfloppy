@@ -16,6 +16,8 @@ static void backend_bind_irqs(uint32_t *vectors)
     vectors[16 + DMA1_CH3_IRQ] = (uint32_t)IRQ_58;
 #endif
 #ifdef DUAL_FDD
+    if (emulation_is_apple2())
+        vectors[16 + 27] = (uint32_t)IRQ_27;
     vectors[16 + 10] = (uint32_t)IRQ_10;
 #if MCU == MCU_stm32f105
     vectors[16 + SOFTIRQ_0] = (uint32_t)IRQ_43;

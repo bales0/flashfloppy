@@ -14,7 +14,7 @@
 
 /* Input pins: DIR=PB0, STEP=PA1, SELA=PA0, SELB=PA3, WGATE=PB9, SIDE=PB4, 
  *             MOTOR=PA15/PB15 */
-#if TARGET == TARGET_apple2
+#if TARGET == TARGET_apple2 || defined(DUAL_FDD)
 #if LEVEL != LEVEL_debug
 #define pin_pha0   10 /* PA10 - (aka UART RX (PCB silk J4)) */
 #define pin_pha1    9 /* PA9  - (aka UART TX) */
@@ -24,7 +24,8 @@
 #endif
 #define pin_pha2    0 /* PB0 */
 #define pin_pha3    1 /* PA1 */
-#elif TARGET == TARGET_shugart
+#endif
+#if TARGET == TARGET_shugart
 #define pin_dir     0 /* PB0 */
 #define pin_step    1 /* PA1 */
 #endif
@@ -59,10 +60,11 @@ DEFINE_IRQ(dma_wdata_irq, "IRQ_wdata_dma");
 DEFINE_IRQ(dma_rdata_irq, "IRQ_rdata_dma");
 
 /* Head step handling. */
-#if TARGET == TARGET_apple2
+#if TARGET == TARGET_apple2 || defined(DUAL_FDD)
 static struct timer step_timer;
 static void POLL_step(void *unused);
-#elif TARGET == TARGET_shugart
+#endif
+#if TARGET == TARGET_shugart
 void IRQ_28(void) __attribute__((alias("IRQ_STEP_changed"))); /* TMR2 */
 #endif
 
@@ -72,12 +74,12 @@ void IRQ_7(void) __attribute__((alias("IRQ_WGATE_rotary"))); /* EXTI1 */
 void IRQ_10(void) __attribute__((alias("IRQ_SIDE_changed"))); /* EXTI4 */
 void IRQ_23(void) __attribute__((alias("IRQ_WGATE_rotary"))); /* EXTI9_5 */
 void IRQ_40(void) __attribute__((alias("IRQ_MOTOR_CHGRST_rotary"))); /* EXTI15_10 */
-#if WDATA_TOGGLE
+#if TARGET == TARGET_apple2 || defined(DUAL_FDD)
 void IRQ_27(void) __attribute__((alias("IRQ_wdata_capture"))); /* TMR1_CC */
 #endif
 #define MOTOR_CHGRST_IRQ 40
 static const struct exti_irq exti_irqs[] = {
-#if WDATA_TOGGLE
+#if TARGET == TARGET_apple2 || defined(DUAL_FDD)
     /* WDATA */ { 27, FLOPPY_IRQ_WGATE_PRI, 0 },
 #endif
     /* SELA */ {  6, FLOPPY_IRQ_SEL_PRI, 0 }, 
@@ -110,6 +112,9 @@ bool_t floppy_ribbon_is_reversed(void)
 #if TARGET == TARGET_shugart
     time_t t_start = time_now();
 
+    if (emulation_is_apple2())
+        return FALSE;
+
     /* If ribbon is reversed then most/all inputs are grounded. 
      * Check SEL plus three inputs which are supposed only to pulse. */
     while (!(gpioa->idr & (m(pin_sel0) | m(pin_step) | m(pin_wdata)))
@@ -132,6 +137,10 @@ static uint32_t *get_bitband(void *ram_addr, unsigned int bit)
 
 static void board_floppy_init(void)
 {
+#if LEVEL == LEVEL_debug && defined(DUAL_FDD)
+    if (emulation_is_apple2())
+        has_kc30_header = 0;
+#endif
     p_dma_rd_active = get_bitband(&gpio_out_active, GPIO_OUT_DMA_RD_ACTIVE);
 
 #if MCU == MCU_stm32f105
@@ -141,7 +150,8 @@ static void board_floppy_init(void)
         | (((mode)&0xfu)<<((pin)<<2))
 
 #if TARGET == TARGET_shugart
-    gpio_configure_pin(gpioa, pin_step, GPI_bus);
+    if (!emulation_is_apple2())
+        gpio_configure_pin(gpioa, pin_step, GPI_bus);
 #endif
     gpio_configure_pin(gpio_data, pin_wdata, GPI_bus);
     gpio_configure_pin(gpio_data, pin_rdata, GPO_bus);
@@ -154,8 +164,10 @@ static void board_floppy_init(void)
 #define afio syscfg
 
 #if TARGET == TARGET_shugart
-    gpio_set_af(gpioa, pin_step, 1);
-    gpio_configure_pin(gpioa, pin_step, AFI(PUPD_none));
+    if (!emulation_is_apple2()) {
+        gpio_set_af(gpioa, pin_step, 1);
+        gpio_configure_pin(gpioa, pin_step, AFI(PUPD_none));
+    }
 #endif
 
     gpio_set_af(gpio_data, pin_wdata, 1);
@@ -171,10 +183,12 @@ static void board_floppy_init(void)
 
     /* PA1 (STEP) triggers IRQ via TIM2 Channel 2, since EXTI is used for 
      * WGATE on PB1. */
-    tim2->ccmr1 = TIM_CCMR1_CC2S(TIM_CCS_INPUT_TI1);
-    tim2->ccer = TIM_CCER_CC2E;
-    tim2->dier = TIM_DIER_CC2IE;
-    tim2->cr1 = TIM_CR1_CEN;
+    if (!emulation_is_apple2()) {
+        tim2->ccmr1 = TIM_CCMR1_CC2S(TIM_CCS_INPUT_TI1);
+        tim2->ccer = TIM_CCER_CC2E;
+        tim2->dier = TIM_DIER_CC2IE;
+        tim2->cr1 = TIM_CR1_CEN;
+    }
 
     if (mcu_package == MCU_QFN32) {
         pin_02 = 16 + 14; /* PA14 */
@@ -182,15 +196,19 @@ static void board_floppy_init(void)
         pin_wgate = 1; /* PB1 */
     }
 
-#if TARGET == TARGET_apple2
-    gpio_configure_pin(gpioa, pin_pha0,  GPI_bus);
-    gpio_configure_pin(gpioa, pin_pha1,  GPI_bus);
-    gpio_configure_pin(gpiob, pin_pha2,  GPI_bus);
-    gpio_configure_pin(gpioa, pin_pha3,  GPI_bus);
-    timer_init(&step_timer, POLL_step, NULL);
-    timer_set(&step_timer, time_now());
-#elif TARGET == TARGET_shugart
-    gpio_configure_pin(gpiob, pin_dir,   GPI_bus);
+#if TARGET == TARGET_apple2 || defined(DUAL_FDD)
+    if (emulation_is_apple2()) {
+        gpio_configure_pin(gpioa, pin_pha0,  GPI_bus);
+        gpio_configure_pin(gpioa, pin_pha1,  GPI_bus);
+        gpio_configure_pin(gpiob, pin_pha2,  GPI_bus);
+        gpio_configure_pin(gpioa, pin_pha3,  GPI_bus);
+        timer_init(&step_timer, POLL_step, NULL);
+        timer_set(&step_timer, time_now());
+    }
+#endif
+#if TARGET == TARGET_shugart
+    if (!emulation_is_apple2())
+        gpio_configure_pin(gpiob, pin_dir,   GPI_bus);
 #endif
     gpio_configure_pin(gpioa, pin_sel0,  GPI_bus);
     gpio_configure_pin(gpiob, pin_wgate, GPI_bus);
@@ -317,7 +335,7 @@ static void update_SELA_irq(bool_t amiga_hd_id)
 #undef OFF
 }
 
-#if TARGET == TARGET_apple2
+#if TARGET == TARGET_apple2 || defined(DUAL_FDD)
 
 static void POLL_step(void *unused)
 {
@@ -359,7 +377,7 @@ static void POLL_step(void *unused)
      *  (3) We haven't hit a cylinder hard limit. */
     switch (pha) {
     case m(1): /* Phase +1 only */
-        if (drv->cyl == ff_cfg.max_cyl)
+        if (drv->cyl == dfl_ff_cfg.fdd_max_cyl)
             goto out;
         drv->step.inward = TRUE;
         break;
@@ -385,7 +403,8 @@ out:
     timer_set(&step_timer, step_timer.deadline + time_ms(1));
 }
 
-#elif TARGET == TARGET_shugart
+#endif
+#if TARGET == TARGET_shugart
 
 static bool_t drive_is_writing(void)
 {
@@ -401,6 +420,7 @@ static bool_t drive_is_writing(void)
 
 static void IRQ_STEP_changed(void)
 {
+    /* Bound only for Shugart: use its settings without a host-mode check. */
     struct drive *drv = &drive;
     uint8_t idr_a, idr_b;
 
@@ -417,7 +437,7 @@ static void IRQ_STEP_changed(void)
 
     /* Deassert DSKCHG if a disk is inserted. */
     if ((drv->outp & m(outp_dskchg)) && drv->inserted
-        && (ff_cfg.chgrst == CHGRST_step))
+        && (ff_cfg.fdd_chgrst == CHGRST_step))
         drive_change_output(drv, outp_dskchg, FALSE);
 
     /* Do we accept this STEP command? */
@@ -427,7 +447,7 @@ static void IRQ_STEP_changed(void)
 
     /* Latch the step direction and check bounds (0 <= cyl <= 255). */
     drv->step.inward = !(idr_b & m(pin_dir));
-    if (drv->cyl == (drv->step.inward ? ff_cfg.max_cyl : 0))
+    if (drv->cyl == (drv->step.inward ? ff_cfg.fdd_max_cyl : 0))
         return;
 
     /* Valid step request for this drive: start the step operation. */
@@ -452,7 +472,7 @@ static void IRQ_STEP_changed(void)
 static void IRQ_SIDE_changed(void)
 {
     stk_time_t t = stk_now();
-    unsigned int filter = stk_us(ff_cfg.side_select_glitch_filter);
+    unsigned int filter = stk_us(FDD_CFG(side_select_glitch_filter));
     struct drive *drv = &drive;
     uint8_t hd;
 
@@ -511,7 +531,7 @@ static void IRQ_MOTOR(struct drive *drv)
     GPIO gpio = gotek_enhanced() ? gpioa : gpiob;
     bool_t mtr_asserted = !(gpio->idr & m(pin_motor));
 
-    if (drv->amiga_pin34 && (ff_cfg.motor_delay != MOTOR_ignore)) {
+    if (drv->amiga_pin34 && (FDD_CFG(motor_delay) != MOTOR_ignore)) {
         IRQ_global_disable();
         drive_change_pin(drv, pin_34, !mtr_asserted);
     }
@@ -522,7 +542,7 @@ static void IRQ_MOTOR(struct drive *drv)
     if (!drv->inserted) {
         /* No disk inserted -- MOTOR OFF */
         drive_change_output(drv, outp_rdy, FALSE);
-    } else if (ff_cfg.motor_delay == MOTOR_ignore) {
+    } else if (FDD_CFG(motor_delay) == MOTOR_ignore) {
         /* Motor signal ignored -- MOTOR ON */
         drv->motor.on = TRUE;
         drive_change_output(drv, outp_rdy, TRUE);
@@ -532,20 +552,20 @@ static void IRQ_MOTOR(struct drive *drv)
     } else {
         /* Motor signal on -- MOTOR SPINNING UP */
         timer_set(&drv->motor.timer,
-                  time_now() + time_ms(ff_cfg.motor_delay * 10));
+                  time_now() + time_ms(FDD_CFG(motor_delay) * 10));
     }
 }
 
 static void IRQ_CHGRST(struct drive *drv)
 {
-    if ((ff_cfg.chgrst == CHGRST_pa14)
+    if ((FDD_CFG(chgrst) == CHGRST_pa14)
         && (gpio_read_pin(gpioa, pin_chgrst) == O_TRUE)
         && drv->inserted) {
         drive_change_output(drv, outp_dskchg, FALSE);
     }
 }
 
-#if WDATA_TOGGLE
+#if TARGET == TARGET_apple2 || defined(DUAL_FDD)
 static void IRQ_wdata_capture(void)
 {
     /* Clear WDATA-captured flag. */
@@ -567,7 +587,7 @@ static void IRQ_MOTOR_CHGRST_rotary(void)
     /* Latch and clear PR[15:10] */
     exti->pr = pr & 0xfc00;
 
-    if (((pr & m(pin_motor)) && (ff_cfg.motor_delay != MOTOR_ignore))
+    if (((pr & m(pin_motor)) && (FDD_CFG(motor_delay) != MOTOR_ignore))
         || changed)
         IRQ_MOTOR(drv);
 
@@ -591,12 +611,12 @@ void motor_chgrst_setup_exti(void)
 {
     uint32_t m = 0;
 
-    if (ff_cfg.motor_delay != MOTOR_ignore) {
+    if (FDD_CFG(motor_delay) != MOTOR_ignore) {
         _exti_route(gotek_enhanced()?0/*PA*/:1/*PB*/, pin_motor);
         m |= m(pin_motor);
     }
 
-    if (ff_cfg.chgrst == CHGRST_pa14) {
+    if (FDD_CFG(chgrst) == CHGRST_pa14) {
         exti_route_pa(pin_chgrst);
         m |= m(pin_chgrst);
     }

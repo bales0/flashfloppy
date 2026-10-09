@@ -160,7 +160,8 @@ static void IRQ_WGATE_rotary(void)
 static bool_t qd_ready_off_on_motor_off(void)
 {
     return ff_cfg.qd_ready == QD_READY_JC ? board_jc_strapped()
-        : ff_cfg.qd_ready == QD_READY_MOTOR_OFF;
+        : ff_cfg.qd_ready == QD_READY_MOTOR_OFF
+        || (ff_cfg.qd_ready == QD_READY_AUTO && ff_cfg.qd_host <= QD_HOST_ROLAND);
 }
 
 static void _IRQ_MOTOR_RESET_changed(unsigned int gpioa_idr)

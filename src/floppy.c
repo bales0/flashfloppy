@@ -124,9 +124,7 @@ static void drive_change_output(
     case outp_trk0:   pin = pin_26; break;
     case outp_wrprot:
         pin = pin_28;
-#if TARGET == TARGET_apple2
-        assert ^= 1;
-#endif
+        assert ^= emulation_is_apple2();
         break;
     default:
         _drive_change_output(drv, outp, assert);
@@ -159,7 +157,7 @@ static void update_amiga_id(struct drive *drv, bool_t amiga_hd_id)
      * every time the drive is selected. */
     update_SELA_irq(amiga_hd_id);
 
-    if (ff_cfg.motor_delay == MOTOR_ignore) {
+    if (FDD_CFG(motor_delay) == MOTOR_ignore) {
         /* Best-effort pin 34 handling:
          * DD-ID: We permanently assert pin 34, even when no disk is inserted. 
          *  Properly we should only do this when MTR is asserted.
@@ -235,7 +233,7 @@ void floppy_set_fintf_mode(void)
     };
     struct drive *drv = &drive;
     uint32_t old_active;
-    uint8_t mode = ff_cfg.interface;
+    uint8_t mode = emulation_is_apple2() ? FINTF_SHUGART : FDD_CFG(interface);
 
     if (mode == FINTF_JC) {
         /* Jumper JC selects default floppy interface configuration:
@@ -249,8 +247,8 @@ void floppy_set_fintf_mode(void)
     IRQ_global_disable();
 
     fintf_mode = mode;
-    pin02 = ff_cfg.pin02 ? ff_cfg.pin02 - 1 : fintfs[mode].pin02;
-    pin34 = ff_cfg.pin34 ? ff_cfg.pin34 - 1 : fintfs[mode].pin34;
+    pin02 = FDD_CFG(pin02) ? FDD_CFG(pin02) - 1 : fintfs[mode].pin02;
+    pin34 = FDD_CFG(pin34) ? FDD_CFG(pin34) - 1 : fintfs[mode].pin34;
     pin02_inverted = !!(pin02 & PIN_invert);
     pin34_inverted = !!(pin34 & PIN_invert);
     pin02 &= ~PIN_invert;
@@ -290,8 +288,8 @@ void floppy_set_max_cyl(void)
 {
     struct drive *drv = &drive;
     IRQ_global_disable();
-    if (drv->cyl > ff_cfg.max_cyl)
-        drv->cyl = ff_cfg.max_cyl;
+    if (drv->cyl > FDD_CFG(max_cyl))
+        drv->cyl = FDD_CFG(max_cyl);
     IRQ_global_enable();
 }
 
@@ -360,8 +358,8 @@ void floppy_insert(unsigned int unit, struct slot *slot)
     barrier();
     drv->inserted = TRUE;
     motor_chgrst_update_status(drv); /* update RDY + motor state */
-    if (ff_cfg.chgrst <= CHGRST_delay(15))
-        timer_set(&drv->chgrst_timer, time_now() + ff_cfg.chgrst*time_ms(500));
+    if (FDD_CFG(chgrst) <= CHGRST_delay(15))
+        timer_set(&drv->chgrst_timer, time_now() + FDD_CFG(chgrst)*time_ms(500));
 }
 
 static void floppy_sync_flux(void)
@@ -420,7 +418,7 @@ static void floppy_sync_flux(void)
         /* IDX is suppressed: Wait for heads to settle.
          * When IDX is not suppressed, settle time is already accounted for in
          * dma_rd_handle()'s call to image_setup_track(). */
-        time_t step_settle = drv->step.start + time_ms(ff_cfg.head_settle_ms);
+        time_t step_settle = drv->step.start + time_ms(FDD_CFG(head_settle_ms));
         int32_t delta = time_diff(time_now(), step_settle) - time_us(1);
         if (delta > time_ms(5))
             return; /* go do other work for a while */
@@ -476,7 +474,7 @@ static bool_t dma_rd_handle(struct drive *drv)
         /* Allow extra time if heads are settling. */
         if (drv->step.state & STEP_settling) {
             time_t step_settle = drv->step.start
-                + time_ms(ff_cfg.head_settle_ms);
+                + time_ms(FDD_CFG(head_settle_ms));
             int32_t delta = time_diff(time_now(), step_settle);
             delay = max_t(int32_t, delta, delay);
         }
@@ -616,7 +614,7 @@ static void drive_step_timer(void *_drv)
         speaker_pulse();
         drv->cyl += drv->step.inward ? 1 : -1;
         timer_set(&drv->step.timer,
-                  drv->step.start + time_ms(ff_cfg.head_settle_ms));
+                  drv->step.start + time_ms(FDD_CFG(head_settle_ms)));
         if (drv->cyl == 0)
             drive_change_output(drv, outp_trk0, TRUE);
         /* New state last, as that lets hi-pri IRQ start another step. */

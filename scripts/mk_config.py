@@ -19,8 +19,13 @@ def main(argv):
         if match:
             opt = match.group(1)            
             val = match.group(2)
+            name = opt
+            if opt.startswith("fdd-"):
+                opt = opt[4:]
             if opt == "interface":
                 val = "FINTF_" + val.upper().replace("-","_")
+            elif opt == "qd-host":
+                val = "QD_HOST_" + val.upper()
             elif opt == "qd-ready":
                 val = "QD_READY_" + val.upper().replace("-", "_")
             elif opt == "pin02" or opt == "pin34":
@@ -108,7 +113,7 @@ def main(argv):
                     'no': 'FALSE',
                     'yes': 'TRUE'
                 }.get(val,val)
-            out_f.write("x(%s, %s, %s)\n" % (opt, re.sub('-','_',opt), val))
+            out_f.write("x(%s, %s, %s)\n" % (name, re.sub('-','_',name), val))
 
 if __name__ == "__main__":
     main(sys.argv)
