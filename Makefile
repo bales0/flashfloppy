@@ -97,11 +97,11 @@ _legacy_dist: FORCE
 	  $(OUT)/$(mcu)/$(level)/quickdisk/target.bin & \
 	$(PYTHON) $(ROOT)/scripts/mk_update.py old \
 	  $(t)/alt/quickdisk/logfile/$(PROJ)-quickdisk-logfile-$(VER).upd \
-	  out/$(mcu)/logfile/quickdisk/target.bin & \
+	  $(OUT)/$(mcu)/logfile/quickdisk/target.bin & \
 	if [ "$(level)" = prod ]; then \
 	$(PYTHON) $(ROOT)/scripts/mk_update.py old \
 	  $(t)/alt/dual/$(PROJ)-dual-$(VER).upd \
-	  out/$(mcu)/$(level)/dual/target.bin; fi & \
+	  $(OUT)/$(mcu)/$(level)/dual/target.bin; fi & \
 	wait
 
 _dist: FORCE
@@ -131,15 +131,15 @@ _dist: FORCE
 	  $(OUT)/$(mcu)/$(level)/quickdisk/target.bin $(mcu) & \
 	$(PYTHON) $(ROOT)/scripts/mk_update.py new \
 	  $(t)/alt/quickdisk/logfile/$(PROJ)-quickdisk-logfile-$(VER).upd \
-	  out/$(mcu)/logfile/quickdisk/target.bin $(mcu) & \
+	  $(OUT)/$(mcu)/logfile/quickdisk/target.bin $(mcu) & \
 	if [ "$(mcu)" != stm32f105 ] || [ "$(level)" = prod ]; then \
 	$(PYTHON) $(ROOT)/scripts/mk_update.py new \
 	  $(t)/alt/dual/$(PROJ)-dual-$(VER).upd \
-	  out/$(mcu)/$(level)/dual/target.bin $(mcu); fi & \
+	  $(OUT)/$(mcu)/$(level)/dual/target.bin $(mcu); fi & \
 	wait
 	if [ "$(mcu)" != stm32f105 ] || [ "$(level)" = prod ]; then \
-	  cp -a out/$(mcu)/$(level)/dual/target.hex $(t)/hex/$(PROJ)-dual-$(n)-$(VER).hex; \
-	  cp -a out/$(mcu)/$(level)/dual/target.dfu $(t)/dfu/$(PROJ)-dual-$(n)-$(VER).dfu; \
+	  cp -a $(OUT)/$(mcu)/$(level)/dual/target.hex $(t)/hex/$(PROJ)-dual-$(n)-$(VER).hex; \
+	  cp -a $(OUT)/$(mcu)/$(level)/dual/target.dfu $(t)/dfu/$(PROJ)-dual-$(n)-$(VER).dfu; \
 	fi
 
 _dist_apple2_at2_bootloader: f := $(t)/alt/apple2/at2-bootloader
