@@ -111,7 +111,8 @@ for kind, target in [('dual', 'dual'), ('bootloader', 'bl_update'), ('fdd', 'shu
 shutil.copytree(root/'examples', package/'examples', dirs_exist_ok=True)
 cfg = (root/'examples/FF.CFG').read_text().replace('fdd-interface = jc', 'fdd-interface = shugart')
 (package/'FF.CFG').write_text('# Sharp MZ-800 Universal preset.\n'+cfg)
-for name in ['dual-firmware.md', 'universal-upstream-fixes-optimization-2026-10.md', 'universal-flash-audit-2026-10.md']:
+for name in ['dual-firmware.md', 'universal-apple-formats-2026-10.md',
+             'universal-upstream-fixes-optimization-2026-10.md', 'universal-flash-audit-2026-10.md']:
     shutil.copyfile(root/'docs'/name, package/name)
 shutil.copyfile(root/'COPYING', package/'COPYING')
 (package/'README.txt').write_text(f'''FlashFloppy {version} Universal: FDD / QuickDisk / Apple II / Update FW.
@@ -120,11 +121,12 @@ STM32F105: FF_Gotek-*.upd. Modern flashfloppy-*.upd catalogs include both MCUs.
 Put only the chosen update file on USB; install bootloader updater first if needed,
 then replace it with the Universal application update. Combined HEX/DFU include both.
 Standalone alternatives are kept in their own alt/ folders and variants/.
-Version remains {version}; this package includes the October 27 upstream fixes.
+Version {version}; this package includes native Apple formats and upstream fixes.
 Logical QD/MZQ/QDF remain read-only, physical QD remains read/write.
-Apple II supports HFE only; encoder SELECT at power-on opens the boot menu.
+Apple II supports HFE/NIB/NIC/DSK/DO/PO read/write; native images have 35-40 tracks.
+Encoder SELECT at power-on opens the boot menu; see QFN32 wiring restrictions.
 Autoload: files 2 seconds, folders disabled. Runtime Main Menu settings are RAM-only.
-Read both current audit reports before hardware testing. Electrical timing remains
+Read universal-apple-formats-2026-10.md before hardware testing. Electrical timing remains
 UNVERIFIED ON HARDWARE; host tests and successful builds do not replace it.
 ''')
 if args.audit:
@@ -133,8 +135,8 @@ if args.audit:
     for path in audit.iterdir():
         if path.is_file() and path.suffix in ['.log', '.json', '.txt', '.diff']:
             shutil.copyfile(path, evidence/path.name)
-    for folder in ['final-stm32f105', 'final-at32f435', 'steps']:
-        for path in (audit/folder).rglob('*'):
+    for folder in sorted(path for path in audit.iterdir() if path.is_dir()):
+        for path in folder.rglob('*'):
             if (path.is_file() and path.suffix in ['.json', '.txt', '.log', '.diff']
                     and path.name != 'source.diff'):
                 dest = evidence/path.relative_to(audit)

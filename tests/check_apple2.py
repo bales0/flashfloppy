@@ -148,6 +148,7 @@ image_prefix = r'''
 #include <ctype.h>
 #include <stdio.h>
 typedef unsigned int bool_t;
+typedef uint32_t FSIZE_t;
 #define TARGET 7
 #define TARGET_dual 7
 #define TARGET_shugart 4
@@ -172,17 +173,20 @@ image_prefix = image_prefix.replace('/* IMAGE_TYPE_FROM_HEADER */',
     re.search(r'struct image_type \{.*?\}', (root/'inc/floppy.h').read_text(), re.S).group(0)+';')
 image_suffix = r'''
 int main(void){
-    const char *names[]={"disk.HFE","disk.dsk","disk.qd","disk.mzq","disk.qdf","disk.do","disk.po","disk.adf","disk.v9t9","disk.V9T9"};
-    for(mode=0;mode<3;mode++)for(unsigned int i=0;i<10;i++){
-        FILINFO f={names[i],11264,0};
-        unsigned int expected=mode==2?i==0:mode==1?(i>=2 && i<=4):(i==0 || i==1 || i>=7);
+    const char *names[]={"disk.HFE","disk.dsk","disk.qd","disk.mzq","disk.qdf","disk.do","disk.po","disk.adf","disk.v9t9","disk.V9T9","disk.nib","disk.nic","disk.v9t9x","disk.dskx"};
+    for(mode=0;mode<3;mode++)for(unsigned int i=0;i<14;i++){
+        unsigned int size=i==10?35*6656:i==11?35*8192:35*4096;
+        FILINFO f={names[i],size,0};
+        unsigned int expected=mode==2?(i==0 || i==1 || i==5 || i==6 || i==10 || i==11):mode==1?(i>=2 && i<=4):(i==0 || i==1 || (i>=7 && i<=9));
+        if(i==7)f.fsize=11264;
         assert(image_valid(&f)==expected);
-        f.fsize=0;assert(!image_valid(&f));f.fsize=11264;f.fattrib=AM_DIR;assert(!image_valid(&f));
+        f.fsize=0;assert(!image_valid(&f));f.fsize=size;f.fattrib=AM_DIR;assert(!image_valid(&f));
     }
-    puts("Apple II: HFE-only catalog; FDD/QD filters and v9t9/V9T9 with actual ext[8] passed");
+    puts("Apple II: native catalog; FDD/QD filters and bounded ext[4] matching passed");
 }
 '''
-(work/'images.c').write_text(image_prefix+'\n'.join('const struct image_handler '+name+'={0};' for name in handlers)+'\n'+tables+function('src/image/image.c','image_valid')+image_suffix)
+size_defines = '\n#define DSK_TRK_LEN 4096\n#define NIC_TRK_LEN 8192\n#define TRK_LEN 6656\n#define MAX_TRKS 40\n'
+(work/'images.c').write_text(image_prefix+'\n'.join('const struct image_handler '+name+'={0};' for name in handlers)+'\n'+tables+size_defines+function('src/image/apple2.c','apple2_valid_size')+function('src/image/image.c','image_type_is')+function('src/image/image.c','image_valid')+image_suffix)
 subprocess.run(['cc','-Wall','-Wextra','-Werror','-fsanitize=address,undefined','-fno-sanitize-recover=all',str(work/'images.c'),'-o',str(work/'images')],check=True)
 subprocess.run([str(work/'images')],check=True)
 

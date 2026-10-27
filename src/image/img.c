@@ -279,7 +279,7 @@ static void tag_add_layout(
     }
 }
 
-static bool_t tag_open(struct image *im, char *tag)
+static bool_t __attribute__((__cold__, __noinline__)) tag_open(struct image *im, char *tag)
 {
     enum {
         IMGCFG_tracks,

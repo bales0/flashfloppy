@@ -674,59 +674,45 @@ fail:
     return FALSE;
 }
 
+extern const uint16_t oled_font_columns[];
 extern const uint8_t oled_font_6x13[];
-static void oled_convert_text_row_6x13(char *pc)
-{
-    unsigned int i, c;
-    const uint8_t *p;
-    uint8_t *q = buffer;
-    const unsigned int w = 6;
-
-    q[0] = q[128] = 0;
-    q++;
-
-    for (i = 0; i < lcd_columns; i++) {
-        if ((c = *pc++ - 0x20) > 0x5e)
-            c = '.' - 0x20;
-        p = &oled_font_6x13[c * w * 2];
-        memcpy(q, p, w);
-        memcpy(q+128, p+w, w);
-        q += w;
-    }
-
-    /* Fill remainder of buffer[] with zeroes. */
-    memset(q, 0, 127-lcd_columns*w);
-    memset(q+128, 0, 127-lcd_columns*w);
-}
-
 #ifdef font_extra
 extern const uint8_t oled_font_8x16[];
-static void oled_convert_text_row_8x16(char *pc)
-{
-    unsigned int i, c;
-    const uint8_t *p;
-    uint8_t *q = buffer;
-    const unsigned int w = 8;
-
-    for (i = 0; i < lcd_columns; i++) {
-        if ((c = *pc++ - 0x20) > 0x5e)
-            c = '.' - 0x20;
-        p = &oled_font_8x16[c * w * 2];
-        memcpy(q, p, w);
-        memcpy(q+128, p+w, w);
-        q += w;
-    }
-}
 #endif
 
 static void oled_convert_text_row(char *pc)
 {
+    unsigned int i, j, c, w = 6;
+    const uint8_t *font = oled_font_6x13, *p;
+    uint8_t *q = buffer;
+
 #ifdef font_extra
-    if (oled_font == FONT_8x16)
-        oled_convert_text_row_8x16(pc);
-    else
+    if (oled_font == FONT_8x16) {
+        w = 8;
+        font = oled_font_8x16;
+    }
 #endif
-        oled_convert_text_row_6x13(pc);
+    if (w == 6) {
+        q[0] = q[128] = 0;
+        q++;
+    }
+
+    for (i = 0; i < lcd_columns; i++) {
+        if ((c = *pc++ - 0x20) > 0x5e)
+            c = '.' - 0x20;
+        p = font + c*w;
+        for (j = 0; j < w; j++) {
+            uint16_t col = oled_font_columns[*p++];
+            q[j] = col;
+            q[j+128] = col >> 8;
+        }
+        q += w;
+    }
+
+    if (w == 6) {
+        memset(q, 0, 127-lcd_columns*w);
+        memset(q+128, 0, 127-lcd_columns*w);
+    }
 }
 
 static unsigned int oled_queue_cmds(

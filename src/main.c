@@ -239,10 +239,10 @@ static void display_write_slot(bool_t nav_mode)
         snprintf(typename, sizeof(typename), "T99");
     } else if (!(cfg.slot.attributes & AM_DIR)) {
         for (type = image_types(); type->handler != NULL; type++)
-            if (slot_type(type->ext))
+            if (image_type_is(type, cfg.slot.type))
                 break;
         if (type->handler != NULL) {
-            snprintf(typename, sizeof(typename), "%s", type->ext);
+            memcpy(typename, type->ext, sizeof(typename)-1);
             for (i = 0; i < sizeof(typename); i++)
                 typename[i] = toupper(typename[i]);
         }
@@ -920,18 +920,15 @@ out:
 /* Parse pinNN= config value. */
 static uint8_t parse_pin_str(const char *s)
 {
+    const static uint8_t values[] = {
+        PIN_low, PIN_high, PIN_invert | PIN_nc, PIN_rdy,
+        PIN_dens, PIN_chg, PIN_auto };
     uint8_t pin = 0;
     if (*s == 'n') {
         pin = PIN_invert;
         s++;
     }
-    pin ^= !strcmp(s, "low") ? PIN_low
-        : !strcmp(s, "high") ? PIN_high
-        : !strcmp(s, "c") ? (PIN_invert | PIN_nc)
-        : !strcmp(s, "rdy") ? PIN_rdy
-        : !strcmp(s, "dens") ? PIN_dens
-        : !strcmp(s, "chg") ? PIN_chg
-        : PIN_auto;
+    pin ^= values[word_index(s, "low\0high\0c\0rdy\0dens\0chg\0")];
     return pin;
 }
 
@@ -969,7 +966,7 @@ static char *next_item(char *p, char sep)
     return p;
 }
 
-static bool_t read_ff_cfg(void)
+static bool_t __attribute__((__cold__, __noinline__)) read_ff_cfg(void)
 {
     enum {
 #define x(n,o,v) FFCFG_##o,

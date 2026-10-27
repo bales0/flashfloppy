@@ -3,9 +3,11 @@
 Date: 9 October 2026. Baseline: the completed Task 2 FDD/QD firmware,
 rebuilt immediately before Task 3. Version remains 3.46.
 
-This is the historical Task 3 report. Current sizes and subsequent corrections
-are in [the 27 October Flash audit](universal-flash-audit-2026-10.md) and
-[upstream-fix report](universal-upstream-fixes-optimization-2026-10.md).
+This is the historical Task 3 report. Current native image support and sizes
+are in [the Apple formats report](universal-apple-formats-2026-10.md). The
+[27 October Flash audit](universal-flash-audit-2026-10.md) and
+[upstream-fix report](universal-upstream-fixes-optimization-2026-10.md) describe
+the preceding changes.
 
 ## Architecture and changed files
 

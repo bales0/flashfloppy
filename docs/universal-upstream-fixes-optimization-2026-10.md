@@ -21,7 +21,7 @@ STM32F105: **94776 B**, **1480 B volné Flash**, proti nově sestavenému baseli
 | P1-B [3ca8a6472](https://github.com/keirf/flashfloppy/commit/3ca8a6472) | Cylinder a TRK0 se nastavují atomicky, TRK0 se i deaktivuje | Skutečná funkce pro cylindry 0…255, návrat na 0, unit 1 beze změny; mock kontroluje vypnuté IRQ a jejich obnovení |
 | P1-C [2eeeb3314](https://github.com/keirf/flashfloppy/commit/2eeeb3314) | `fres` v `floppy_main()` začíná na `FR_OK` | Kontrola skutečného toku a inicializace před ejected/run větví; fyzický USB startup se stisknutým tlačítkem zbývá otestovat |
 | P1-D [fec71c639](https://github.com/keirf/flashfloppy/commit/fec71c639), [92ef569aa](https://github.com/keirf/flashfloppy/commit/92ef569aa) | Sdílený `hfe_open()` kontroluje boot-selected režim před inicializací cache/seek | Všech 256 encodingů pro HFEv1/v3 a oba režimy: Apple pouze GCR1/GCR2/unknown, FDD odmítá GCR1/GCR2 |
-| P1-E [2beecd765](https://github.com/keirf/flashfloppy/commit/2beecd765) | Příčina se **neuplatňuje**: fork už má `image_type.ext[8]` a `slot.type[7]`; `.v9t9` je ukončené NUL | Doplněna regrese `.v9t9`/`.V9T9` se skutečným `image_type` z hlavičky. Zbytečný upstream refaktor image API nepřevzat |
+| P1-E [2beecd765](https://github.com/keirf/flashfloppy/commit/2beecd765) | V tomto historickém auditu se příčina **neuplatňuje**: fork má `image_type.ext[8]` a `slot.type[7]` | Doplněna regrese `.v9t9`/`.V9T9`. Navazující [Apple změna](universal-apple-formats-2026-10.md) zmenšuje katalog na `ext[4]` a zavádí omezené porovnání bez požadavku na NUL v katalogu. Globální upstream refaktor image API nepřevzat |
 
 Odchylka u rotary: fork nemá upstream `xchg()`. Příznak ukládá pouze FALSE/TRUE,
 proto jeho atomické vybrání a vynulování používá stávající

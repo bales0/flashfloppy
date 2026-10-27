@@ -46,6 +46,21 @@ struct adf_image {
     uint8_t sec_map[2][22];
 };
 
+struct apple2_image {
+    uint32_t trk_off;
+    uint16_t trk_pos;
+    uint16_t trk_len; /* bytes per track in the file */
+    bool_t nic; /* streamed by the sector, as .nic blocks */
+    bool_t dsk; /* sectors of 256 bytes, made into .nic blocks */
+    const uint8_t *file_sec; /* the file's sector for each physical one */
+    struct {
+        uint32_t start; /* stream bit where the write began */
+        uint16_t nr; /* nibbles decoded so far */
+        uint8_t acc, nbits; /* the nibble being decoded */
+        bool_t lost; /* more nibbles than the staging buffer holds */
+    } write;
+};
+
 struct hfe_image {
     uint16_t tlut_base;
     uint16_t trk_off;
@@ -199,6 +214,7 @@ struct image {
     union {
         struct adf_image adf;
         struct hfe_image hfe;
+        struct apple2_image a2;
         struct qd_image qd;
         struct img_image img;
         struct dsk_image dsk;
@@ -228,9 +244,12 @@ extern const struct image_handler qd_logical_image_handler;
 
 /* List of supported image types. */
 extern const struct image_type {
-    char ext[8];
+    char ext[4]; /* NUL-terminated only when shorter than four characters. */
     const struct image_handler *handler;
 } image_type[];
+
+bool_t image_type_is(const struct image_type *type, const char *ext);
+bool_t apple2_valid_size(const char *ext, FSIZE_t size);
 
 #if TARGET == TARGET_dual
 const struct image_type *image_types(void);

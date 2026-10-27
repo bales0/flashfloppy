@@ -103,7 +103,7 @@ print(f'Actual FF.CFG parser: {len(names)} keys, {len(cases)} valid/invalid case
 
 # The shared parser must also preserve IMG.CFG option indices and sections.
 img=(root/'src/image/img.c').read_text()
-start=img.index('    enum {',img.index('static bool_t tag_open('))
+start=img.index('    enum {',re.search(r'^static bool_t[^\n]+\btag_open\(',img,re.M).start())
 table=img[start:img.index('    int match,',start)]
 nr='.nr=IMGCFG_nr,' if 'unsigned int nr;' in (root/'inc/config.h').read_text() else ''
 img_main=r'''

@@ -69,6 +69,7 @@ const struct image_type image_type[] = {
 };
 
 #if TARGET == TARGET_dual
+extern const struct image_handler apple2_image_handler;
 extern const struct image_handler qd_image_handler;
 static const struct image_type qd_image_types[] = {
     { "qd", &qd_image_handler },
@@ -78,7 +79,13 @@ static const struct image_type qd_image_types[] = {
 };
 
 static const struct image_type apple_image_types[] = {
-    { "hfe", &hfe_image_handler }, { "", NULL }
+    { "hfe", &hfe_image_handler },
+    { "nib", &apple2_image_handler },
+    { "nic", &apple2_image_handler },
+    { "dsk", &apple2_image_handler },
+    { "do", &apple2_image_handler },
+    { "po", &apple2_image_handler },
+    { "", NULL }
 };
 
 const struct image_type *image_types(void)
@@ -91,9 +98,16 @@ const struct image_type *image_types(void)
 #elif TARGET == TARGET_apple2
 
 extern const struct image_handler hfe_image_handler;
+extern const struct image_handler apple2_image_handler;
+
 
 const struct image_type image_type[] = {
     { "hfe", &hfe_image_handler },
+    { "nib", &apple2_image_handler },
+    { "nic", &apple2_image_handler },
+    { "dsk", &apple2_image_handler },
+    { "do", &apple2_image_handler },
+    { "po", &apple2_image_handler },
     { "", NULL }
 };
 
@@ -110,6 +124,12 @@ const struct image_type image_type[] = {
 
 #endif
 
+
+bool_t image_type_is(const struct image_type *type, const char *ext)
+{
+    return (strlen(ext) <= sizeof(type->ext))
+        && !strncmp(type->ext, ext, sizeof(type->ext));
+}
 
 bool_t image_valid(FILINFO *fp)
 {
@@ -132,8 +152,9 @@ bool_t image_valid(FILINFO *fp)
     } else {
         const struct image_type *type;
         for (type = image_types(); type->handler != NULL; type++)
-            if (!strcmp(ext, type->ext))
-                return TRUE;
+            if (image_type_is(type, ext))
+                return !emulation_is_apple2()
+                    || apple2_valid_size(ext, fp->fsize);
     }
 
     return FALSE;
@@ -187,8 +208,13 @@ void image_open(struct image *im, struct slot *slot, DWORD *cltbl)
 
 #if TARGET == TARGET_dual
     if (emulation_is_apple2()) {
-        if (try_handler(im, slot, cltbl, &hfe_image_handler))
+        /* Older indexed slots may have no extension metadata: keep HFE probing. */
+        if (!slot->type[0] && try_handler(im, slot, cltbl, &hfe_image_handler))
             return;
+        for (type = apple_image_types; type->handler != NULL; type++)
+            if (image_type_is(type, slot->type)
+                && try_handler(im, slot, cltbl, type->handler))
+                return;
         F_die(FR_BAD_IMAGE);
     }
     if (emulation_is_qd()) {
@@ -206,7 +232,7 @@ void image_open(struct image *im, struct slot *slot, DWORD *cltbl)
 
     /* Use the extension as a hint to the correct image handler. */
     for (type = image_types(); type->handler != NULL; type++)
-        if (!strcmp(ext, type->ext))
+        if (image_type_is(type, ext))
             break;
     hint = type->handler;
 
@@ -252,8 +278,14 @@ void image_open(struct image *im, struct slot *slot, DWORD *cltbl)
 
 void image_open(struct image *im, struct slot *slot, DWORD *cltbl)
 {
-    if (try_handler(im, slot, cltbl, &hfe_image_handler))
+    const struct image_type *type;
+
+    if (!slot->type[0] && try_handler(im, slot, cltbl, &hfe_image_handler))
         return;
+    for (type = image_type; type->handler != NULL; type++)
+        if (image_type_is(type, slot->type)
+            && try_handler(im, slot, cltbl, type->handler))
+            return;
 
     /* No handler found: bad image. */
     F_die(FR_BAD_IMAGE);

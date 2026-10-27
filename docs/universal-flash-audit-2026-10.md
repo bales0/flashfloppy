@@ -1,5 +1,8 @@
 # Universal 3.46 — audit Flash a SRAM, 27. 10. 2026
 
+Historický audit před přidáním nativních Apple obrazů. Aktuální velikosti jsou
+v [navazujícím reportu](universal-apple-formats-2026-10.md).
+
 Výchozí zdroj `ca2f27daf8a17474ff429e1d1d33a25ce2223239`, větev změn
 `codex/upstream-fixes-flash-audit`. Aktuální výsledek je pracovní diff proti
 tomuto commitu, nikoli merge celého upstreamu. Referenční upstream je

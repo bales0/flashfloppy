@@ -53,6 +53,8 @@ def check(mcu, level):
     assert 'POLL_step' in syms and 'step_timer' in syms
     assert syms['fdd_IRQ_27'] == syms['IRQ_wdata_capture']
     assert 'hfe_image_handler' in syms and 'apple_image_types' in syms
+    assert 'apple2_image_handler' in syms and 'apple2_valid_size' in syms
+    assert 'bc_rdata_flux' in syms, 'missing shared Apple flux converter'
 
     methods = ["floppy_init", "floppy_ribbon_is_reversed", "floppy_insert",
                "floppy_cancel", "floppy_handle", "floppy_set_cyl",

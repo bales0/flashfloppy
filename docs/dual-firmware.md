@@ -1,9 +1,9 @@
 # Universal FDD, QuickDisk and Apple II firmware
 
-The 27 October 2026 corrections and current measured sizes are documented in
-[upstream fixes](universal-upstream-fixes-optimization-2026-10.md) and the
-[Flash audit](universal-flash-audit-2026-10.md). Earlier validation reports
-retain their historical build measurements.
+The current Apple image support and measured sizes are documented in
+[native Apple formats](universal-apple-formats-2026-10.md). The earlier
+[upstream fixes](universal-upstream-fixes-optimization-2026-10.md) and
+[Flash audit](universal-flash-audit-2026-10.md) retain their historical measurements.
 
 The `dual` target contains the regular Shugart FDD emulator, an Apple II phase
 frontend sharing the same FDD core, and the separate QuickDisk backend in one
@@ -69,8 +69,12 @@ also remain available.
 
 ### Apple II frontend
 
-Apple II lists HFE images only (HFE remains available in FDD mode too). Native
-DO/PO/DSK Apple containers are not supported. The interface uses the existing
+Apple II lists HFE, NIB, NIC, DSK, DO and PO images, with read/write support.
+Native images support 35–40 tracks; sector images use 16 sectors of 256 bytes
+per track. DO uses DOS 3.3 order, PO uses ProDOS order, and DSK probes for a
+ProDOS directory before choosing the order. The optional 128-byte Agat trailer
+is preserved. Apple DSK and FDD DSK use separate handlers selected by boot mode.
+HFE remains available in FDD mode too. The interface uses the existing
 standalone phase decoder and one 1 ms timer: PH0=PA10, PH1=PA9, PH2=PB0,
 PH3=PA1 in production. Debug builds use PA6/PA15 for PH0/PH1 and disable
 the conflicting KC30 rotary header after the Apple frontend is selected.

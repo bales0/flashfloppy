@@ -2,9 +2,9 @@
 OBJS += image.o
 
 OBJS-$(quickdisk) += qd.o
-OBJS-$(dual) += qd.o adf.o dsk.o hfe.o img.o da.o dummy.o mfm.o
+OBJS-$(dual) += apple2.o qd.o adf.o dsk.o hfe.o img.o da.o dummy.o mfm.o
 
-OBJS-$(apple2) += hfe.o
+OBJS-$(apple2) += apple2.o hfe.o mfm.o
 
 OBJS-$(shugart) += adf.o
 OBJS-$(shugart) += dsk.o
