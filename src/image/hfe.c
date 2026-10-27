@@ -33,6 +33,8 @@ enum {
     ENC_Amiga_MFM,
     ENC_ISOIBM_FM,
     ENC_Emu_FM,
+    ENC_AppleII_GCR1 = 6,
+    ENC_AppleII_GCR2 = 7,
     ENC_Unknown = 0xff
 };
 
@@ -94,6 +96,17 @@ static bool_t hfe_open(struct image *im)
     if ((dhdr.nr_tracks == 0)
         || (dhdr.nr_sides < 1) || (dhdr.nr_sides > 2)
         || (bitrate == 0)) {
+        return FALSE;
+    }
+
+    /* One shared handler: validate encoding against the boot-selected host. */
+    if (emulation_is_apple2()) {
+        if ((dhdr.track_encoding != ENC_Unknown)
+            && (dhdr.track_encoding != ENC_AppleII_GCR1)
+            && (dhdr.track_encoding != ENC_AppleII_GCR2))
+            return FALSE;
+    } else if ((dhdr.track_encoding == ENC_AppleII_GCR1)
+               || (dhdr.track_encoding == ENC_AppleII_GCR2)) {
         return FALSE;
     }
 

@@ -9,18 +9,17 @@
  * See the file COPYING for more details, or visit <http://unlicense.org>.
  */
 
-struct opt {
-    const char *name;
-};
-
 struct opts {
     FIL *file;
-    const struct opt *opts;
+    /* NUL-separated names, followed by one extra NUL. */
+    const char *opts;
+    unsigned int nr;
     char *arg;
     int argmax;
 };
 
 int get_next_opt(struct opts *opts);
+unsigned int word_index(const char *s, const char *list);
 #define OPT_eof -1
 #define OPT_section -2
 
@@ -196,8 +195,8 @@ extern const struct ff_cfg dfl_ff_cfg;
 #if TARGET == TARGET_apple2
 #define FDD_CFG(field) (dfl_ff_cfg.fdd_##field)
 #elif TARGET == TARGET_dual || defined(DUAL_FDD)
-#define FDD_CFG(field) (emulation_is_apple2() ? dfl_ff_cfg.fdd_##field \
-                        : ff_cfg.fdd_##field)
+extern const struct ff_cfg *fdd_cfg;
+#define FDD_CFG(field) (fdd_cfg->fdd_##field)
 #else
 #define FDD_CFG(field) (ff_cfg.fdd_##field)
 #endif

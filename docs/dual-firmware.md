@@ -1,5 +1,10 @@
 # Universal FDD, QuickDisk and Apple II firmware
 
+The 27 October 2026 corrections and current measured sizes are documented in
+[upstream fixes](universal-upstream-fixes-optimization-2026-10.md) and the
+[Flash audit](universal-flash-audit-2026-10.md). Earlier validation reports
+retain their historical build measurements.
+
 The `dual` target contains the regular Shugart FDD emulator, an Apple II phase
 frontend sharing the same FDD core, and the separate QuickDisk backend in one
 application. The USB/storage stack, filesystem, navigation,

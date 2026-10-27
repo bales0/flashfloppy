@@ -235,6 +235,10 @@ void floppy_set_fintf_mode(void)
     uint32_t old_active;
     uint8_t mode = emulation_is_apple2() ? FINTF_SHUGART : FDD_CFG(interface);
 
+    /* A newer or corrupt saved interface must not index outside fintfs[]. */
+    if (mode >= ARRAY_SIZE(fintfs))
+        mode = FINTF_JC;
+
     if (mode == FINTF_JC) {
         /* Jumper JC selects default floppy interface configuration:
          *   - No Jumper: Shugart
@@ -543,9 +547,9 @@ void floppy_set_cyl(uint8_t unit, uint8_t cyl)
 {
     if (unit == 0) {
         struct drive *drv = &drive;
+        IRQ_global_disable();
         drv->cyl = cyl;
-        if (cyl == 0)
-            drive_change_output(drv, outp_trk0, TRUE);
+        drive_change_output(drv, outp_trk0, cyl == 0); /* enables IRQs */
     }
 }
 

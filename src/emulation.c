@@ -2,6 +2,7 @@
  * IRQ vectors point directly to that engine, preserving ISR latency. */
 
 uint8_t emulation_mode;
+const struct ff_cfg *fdd_cfg;
 static const struct emulation_ops *active;
 
 #if MCU == MCU_at32f435
@@ -18,6 +19,7 @@ void emulation_select(uint8_t mode)
     /* Called only at boot, before enabling any interface IRQ or DMA. */
     uint32_t oldpri = IRQ_save(TIMER_IRQ_PRI);
     emulation_mode = mode <= EMULATION_APPLE2 ? mode : EMULATION_FDD;
+    fdd_cfg = emulation_is_apple2() ? &dfl_ff_cfg : &ff_cfg;
     active = emulation_is_qd() ? &qd_emulation_ops : &fdd_emulation_ops;
     memcpy(emulation_vectors, vector_table, sizeof(emulation_vectors));
     active->bind_irqs(emulation_vectors);

@@ -3,5 +3,7 @@
 *.rej
 /out
 /ext
-/tests
+/tests/*
+!/tests/*.py
+!/tests/*.c
 /specification

@@ -325,7 +325,7 @@ static void update_SELA_irq(bool_t amiga_hd_id)
 
     /* Create a new tail-call instruction for the entry stub. */
     opcode = handler - (entry + OFF*2 + 4);
-    opcode = 0xe000 | (opcode >> 1);
+    opcode = 0xe000 | ((opcode >> 1) & 0x7ff);
 
     /* If the tail-call instruction has changed, modify the entry stub. */
     if (unlikely(((uint16_t *)entry)[OFF] != opcode)) {
@@ -512,6 +512,9 @@ static void IRQ_WGATE(void)
     }
 }
 
+/* WGATE has higher priority than the button timer and rotary decoder. */
+static volatile bool_t rotary_changed;
+
 static void IRQ_WGATE_rotary(void)
 {
     uint32_t rot_mask = board_rotary_exti_mask, pr = exti->pr;
@@ -522,8 +525,11 @@ static void IRQ_WGATE_rotary(void)
     if (pr & m(pin_wgate))
         IRQ_WGATE();
 
-    if (pr & rot_mask)
-        IRQ_rotary();
+    if (pr & rot_mask) {
+        rotary_changed = TRUE;
+        barrier(); /* Publish the edge before pending the timer-priority IRQ. */
+        IRQx_set_pending(MOTOR_CHGRST_IRQ);
+    }
 }
 
 static void IRQ_MOTOR(struct drive *drv)
@@ -579,10 +585,12 @@ static void IRQ_wdata_capture(void)
 static void IRQ_MOTOR_CHGRST_rotary(void)
 {
     struct drive *drv = &drive;
-    bool_t changed = drv->motor.changed;
+    bool_t changed = drv->motor.changed, rot_changed;
     uint32_t rot_mask = board_rotary_exti_mask, pr = exti->pr;
 
     drv->motor.changed = FALSE;
+    /* Only FALSE/TRUE are stored: this atomically exchanges the flag to FALSE. */
+    rot_changed = cmpxchg(&rotary_changed, TRUE, FALSE);
 
     /* Latch and clear PR[15:10] */
     exti->pr = pr & 0xfc00;
@@ -595,7 +603,7 @@ static void IRQ_MOTOR_CHGRST_rotary(void)
         || changed)
         IRQ_CHGRST(drv);
 
-    if (pr & rot_mask)
+    if ((pr & rot_mask) || rot_changed)
         IRQ_rotary();
 }
 

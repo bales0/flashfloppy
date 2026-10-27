@@ -305,28 +305,10 @@ static bool_t tag_open(struct image *im, char *tag)
         IMGCFG_nr
     };
 
-    const static struct opt img_cfg_opts[IMGCFG_nr+1] = {
-        [IMGCFG_tracks] = { "tracks" },
-        [IMGCFG_cyls] = { "cyls" },
-        [IMGCFG_heads] = { "heads" },
-        [IMGCFG_step] = { "step" },
-        [IMGCFG_secs] = { "secs" },
-        [IMGCFG_bps] = { "bps" },
-        [IMGCFG_img_bps] = { "img_bps" },
-        [IMGCFG_id] = { "id" },
-        [IMGCFG_h] = { "h" },
-        [IMGCFG_mode] = { "mode" },
-        [IMGCFG_interleave] = { "interleave" },
-        [IMGCFG_cskew] = { "cskew" },
-        [IMGCFG_hskew] = { "hskew" },
-        [IMGCFG_rpm]  = { "rpm" },
-        [IMGCFG_gap2] = { "gap2" },
-        [IMGCFG_gap3] = { "gap3" },
-        [IMGCFG_gap4a] = { "gap4a" },
-        [IMGCFG_iam]  = { "iam" },
-        [IMGCFG_rate] = { "rate" },
-        [IMGCFG_file_layout] = { "file-layout" },
-    };
+    const static char img_cfg_opts[] =
+        "tracks\0cyls\0heads\0step\0secs\0bps\0img_bps\0id\0h\0mode\0"
+        "interleave\0cskew\0hskew\0rpm\0gap2\0gap3\0gap4a\0iam\0rate\0"
+        "file-layout\0";
 
     int match, active, option, nr_t = 0;
     struct {
@@ -339,6 +321,7 @@ static bool_t tag_open(struct image *im, char *tag)
     struct opts opts = {
         .file = &heap->file,
         .opts = img_cfg_opts,
+        .nr = IMGCFG_nr,
         .arg = heap->buf,
         .argmax = sizeof(heap->buf)-1
     };
@@ -1802,7 +1785,8 @@ static uint32_t calc_start_pos(struct image *im)
     if (bc < 0)
         bc += im->tracklen_bc;
 
-    im->img.crc = 0xffff;
+    /* Best effort when starting inside the first sector-data chunk. */
+    im->img.crc = (im->sync == SYNC_fm) ? FM_DAM_CRC : MFM_DAM_CRC;
     im->img.trk_sec = im->img.rd_sec_pos = im->img.decode_data_pos = 0;
     decode_off = bc / 16;
     if (decode_off < im->img.idx_sz) {

@@ -348,8 +348,8 @@ static void led_7seg_update_track(bool_t force)
             display_write_slot(FALSE);
         showing_track = FALSE;
         active_countdown = 0;
-        if (display_state == LED_TRACK)
-            display_state = LED_TRACK_QUIESCENT;
+        /* Preserve a concurrent button press changing the display state. */
+        cmpxchg(&display_state, LED_TRACK, LED_TRACK_QUIESCENT);
         return;
     }
 
@@ -959,6 +959,16 @@ static uint16_t parse_display_order(const char *p)
     return order;
 }
 
+/* Terminate one list item and return the next item's start. */
+static char *next_item(char *p, char sep)
+{
+    while (*p && (*p != sep))
+        p++;
+    if (*p)
+        *p++ = '\0';
+    return p;
+}
+
 static bool_t read_ff_cfg(void)
 {
     enum {
@@ -968,17 +978,19 @@ static bool_t read_ff_cfg(void)
         FFCFG_nr
     };
 
-    const static struct opt ff_cfg_opts[FFCFG_nr+1] = {
-#define x(n,o,v) [FFCFG_##o] = { #n },
+    const static char ff_cfg_opts[] =
+#define x(n,o,v) #n "\0"
 #include "ff_cfg_defaults.h"
 #undef x
-    };
+        ;
 
     FRESULT fr;
     int option;
+    bool_t yes;
     struct opts opts = {
         .file = &fs->file,
         .opts = ff_cfg_opts,
+        .nr = FFCFG_nr,
         .arg = fs->buf,
         .argmax = sizeof(fs->buf)-1
     };
@@ -990,54 +1002,50 @@ static bool_t read_ff_cfg(void)
 
     while ((option = get_next_opt(&opts)) != -1) {
 
+        yes = !strcmp(opts.arg, "yes");
+
         switch (option) {
 
             /* DRIVE EMULATION */
 
-        case FFCFG_fdd_interface:
-            ff_cfg.fdd_interface =
-                !strcmp(opts.arg, "shugart") ? FINTF_SHUGART
-                : !strcmp(opts.arg, "ibmpc") ? FINTF_IBMPC
-                : !strcmp(opts.arg, "ibmpc-hdout") ? FINTF_IBMPC_HDOUT
-                : !strcmp(opts.arg, "jppc") ? FINTF_JPPC
-                : !strcmp(opts.arg, "jppc-hdout") ? FINTF_JPPC_HDOUT
-                : !strcmp(opts.arg, "akai-s950") ? FINTF_JPPC_HDOUT
-                : !strcmp(opts.arg, "amiga") ? FINTF_AMIGA
-                : FINTF_JC;
+        case FFCFG_fdd_interface: {
+            const static uint8_t v[] = {
+                FINTF_SHUGART, FINTF_IBMPC, FINTF_IBMPC_HDOUT, FINTF_JPPC,
+                FINTF_JPPC_HDOUT, FINTF_JPPC_HDOUT, FINTF_AMIGA, FINTF_JC };
+            ff_cfg.fdd_interface = v[word_index(opts.arg,
+                "shugart\0ibmpc\0ibmpc-hdout\0jppc\0jppc-hdout\0akai-s950\0"
+                "amiga\0")];
             break;
+        }
 
-        case FFCFG_qd_host:
-            ff_cfg.qd_host = !strcmp(opts.arg, "roland") ? QD_HOST_ROLAND
-                : !strcmp(opts.arg, "akai") ? QD_HOST_AKAI
-                : !strcmp(opts.arg, "generic") ? QD_HOST_GENERIC : QD_HOST_SHARP;
+        case FFCFG_qd_host: {
+            const static uint8_t v[] = {
+                QD_HOST_ROLAND, QD_HOST_AKAI, QD_HOST_GENERIC, QD_HOST_SHARP };
+            ff_cfg.qd_host = v[word_index(opts.arg,
+                "roland\0akai\0generic\0")];
             break;
+        }
 
-        case FFCFG_qd_ready:
-            ff_cfg.qd_ready = !strcmp(opts.arg, "standard") ? QD_READY_STANDARD
-                : !strcmp(opts.arg, "motor-off") ? QD_READY_MOTOR_OFF
-                : !strcmp(opts.arg, "jc") ? QD_READY_JC : QD_READY_AUTO;
+        case FFCFG_qd_ready: {
+            const static uint8_t v[] = {
+                QD_READY_STANDARD, QD_READY_MOTOR_OFF, QD_READY_JC, QD_READY_AUTO };
+            ff_cfg.qd_ready = v[word_index(opts.arg,
+                "standard\0motor-off\0jc\0")];
             break;
+        }
 
-        case FFCFG_fdd_host:
-            ff_cfg.fdd_host =
-                !strcmp(opts.arg, "acorn") ? HOST_acorn
-                : !strcmp(opts.arg, "akai") ? HOST_akai
-                : !strcmp(opts.arg, "casio") ? HOST_casio
-                : !strcmp(opts.arg, "dec") ? HOST_dec
-                : !strcmp(opts.arg, "ensoniq") ? HOST_ensoniq
-                : !strcmp(opts.arg, "fluke") ? HOST_fluke
-                : !strcmp(opts.arg, "gem") ? HOST_gem
-                : !strcmp(opts.arg, "ibm-3174") ? HOST_ibm_3174
-                : !strcmp(opts.arg, "memotech") ? HOST_memotech
-                : !strcmp(opts.arg, "msx") ? HOST_msx
-                : !strcmp(opts.arg, "nascom") ? HOST_nascom
-                : !strcmp(opts.arg, "pc98") ? HOST_pc98
-                : !strcmp(opts.arg, "pc-dos") ? HOST_pc_dos
-                : !strcmp(opts.arg, "tandy-coco") ? HOST_tandy_coco
-                : !strcmp(opts.arg, "ti99") ? HOST_ti99
-                : !strcmp(opts.arg, "uknc") ? HOST_uknc
-                : HOST_unspecified;
+        case FFCFG_fdd_host: {
+            const static uint8_t v[] = {
+                HOST_acorn, HOST_akai, HOST_casio, HOST_dec, HOST_ensoniq,
+                HOST_fluke, HOST_gem, HOST_ibm_3174, HOST_memotech, HOST_msx,
+                HOST_nascom, HOST_pc98, HOST_pc_dos, HOST_tandy_coco, HOST_ti99,
+                HOST_uknc, HOST_unspecified };
+            ff_cfg.fdd_host = v[word_index(opts.arg,
+                "acorn\0akai\0casio\0dec\0ensoniq\0fluke\0gem\0ibm-3174\0"
+                "memotech\0msx\0nascom\0pc98\0pc-dos\0tandy-coco\0ti99\0"
+                "uknc\0")];
             break;
+        }
 
         case FFCFG_fdd_pin02:
             ff_cfg.fdd_pin02 = parse_pin_str(opts.arg);
@@ -1048,7 +1056,7 @@ static bool_t read_ff_cfg(void)
             break;
 
         case FFCFG_write_protect:
-            ff_cfg.write_protect = !strcmp(opts.arg, "yes");
+            ff_cfg.write_protect = yes;
             break;
 
         case FFCFG_fdd_max_cyl:
@@ -1065,15 +1073,16 @@ static bool_t read_ff_cfg(void)
                 : TRKCHG_instant;
             break;
 
-        case FFCFG_write_drain:
-            ff_cfg.write_drain =
-                !strcmp(opts.arg, "realtime") ? WDRAIN_realtime
-                : !strcmp(opts.arg, "eot") ? WDRAIN_eot
-                : WDRAIN_instant;
+        case FFCFG_write_drain: {
+            const static uint8_t v[] = {
+                WDRAIN_realtime, WDRAIN_eot, WDRAIN_instant };
+            ff_cfg.write_drain = v[word_index(opts.arg,
+                "realtime\0eot\0")];
             break;
+        }
 
         case FFCFG_index_suppression:
-            ff_cfg.index_suppression = !strcmp(opts.arg, "yes");
+            ff_cfg.index_suppression = yes;
             break;
 
         case FFCFG_fdd_head_settle_ms:
@@ -1097,14 +1106,16 @@ static bool_t read_ff_cfg(void)
             /* STARTUP / INITIALISATION */
 
         case FFCFG_ejected_on_startup:
-            ff_cfg.ejected_on_startup = !strcmp(opts.arg, "yes");
+            ff_cfg.ejected_on_startup = yes;
             break;
 
-        case FFCFG_image_on_startup:
-            ff_cfg.image_on_startup =
-                !strcmp(opts.arg, "static") ? IMGS_static
-                : !strcmp(opts.arg, "last") ? IMGS_last : IMGS_init;
+        case FFCFG_image_on_startup: {
+            const static uint8_t v[] = {
+                IMGS_static, IMGS_last, IMGS_init };
+            ff_cfg.image_on_startup = v[word_index(opts.arg,
+                "static\0last\0")];
             break;
+        }
 
         case FFCFG_display_probe_ms:
             ff_cfg.display_probe_ms = strtol(opts.arg, NULL, 10);
@@ -1120,49 +1131,48 @@ static bool_t read_ff_cfg(void)
             ff_cfg.autoselect_folder_secs = strtol(opts.arg, NULL, 10);
             break;
 
-        case FFCFG_folder_sort:
-            ff_cfg.folder_sort =
-                !strcmp(opts.arg, "never") ? SORT_never
-                : !strcmp(opts.arg, "small") ? SORT_small
-                : SORT_always;
+        case FFCFG_folder_sort: {
+            const static uint8_t v[] = {
+                SORT_never, SORT_small, SORT_always };
+            ff_cfg.folder_sort = v[word_index(opts.arg,
+                "never\0small\0")];
             break;
+        }
 
-        case FFCFG_sort_priority:
-            ff_cfg.sort_priority =
-                !strcmp(opts.arg, "none") ? SORTPRI_none
-                : !strcmp(opts.arg, "files") ? SORTPRI_files
-                : SORTPRI_folders;
+        case FFCFG_sort_priority: {
+            const static uint8_t v[] = {
+                SORTPRI_none, SORTPRI_files, SORTPRI_folders };
+            ff_cfg.sort_priority = v[word_index(opts.arg,
+                "none\0files\0")];
             break;
+        }
 
-        case FFCFG_nav_mode:
-            ff_cfg.nav_mode =
-                !strcmp(opts.arg, "native") ? NAVMODE_native
-                : !strcmp(opts.arg, "indexed") ? NAVMODE_indexed
-                : NAVMODE_default;
+        case FFCFG_nav_mode: {
+            const static uint8_t v[] = {
+                NAVMODE_native, NAVMODE_indexed, NAVMODE_default };
+            ff_cfg.nav_mode = v[word_index(opts.arg,
+                "native\0indexed\0")];
             break;
+        }
 
         case FFCFG_nav_loop:
-            ff_cfg.nav_loop = !strcmp(opts.arg, "yes");
+            ff_cfg.nav_loop = yes;
             break;
 
         case FFCFG_twobutton_action: {
             char *p, *q;
             ff_cfg.twobutton_action = TWOBUTTON_zero;
             for (p = opts.arg; *p != '\0'; p = q) {
-                for (q = p; *q && *q != ','; q++)
-                    continue;
-                if (*q == ',')
-                    *q++ = '\0';
+                q = next_item(p, ',');
                 if (!strcmp(p, "reverse")) {
                     ff_cfg.twobutton_action |= TWOBUTTON_reverse;
                 } else {
+                    const static uint8_t v[] = {
+                        TWOBUTTON_rotary, TWOBUTTON_rotary_fast,
+                        TWOBUTTON_eject, TWOBUTTON_htu, TWOBUTTON_zero };
                     ff_cfg.twobutton_action &= TWOBUTTON_reverse;
-                    ff_cfg.twobutton_action |=
-                        !strcmp(p, "rotary") ? TWOBUTTON_rotary
-                        : !strcmp(p, "rotary-fast") ? TWOBUTTON_rotary_fast
-                        : !strcmp(p, "eject") ? TWOBUTTON_eject
-                        : !strcmp(p, "htu") ? TWOBUTTON_htu
-                        : TWOBUTTON_zero;
+                    ff_cfg.twobutton_action |= v[word_index(
+                        p, "rotary\0rotary-fast\0eject\0htu\0")];
                 }
             }
             break;
@@ -1172,23 +1182,18 @@ static bool_t read_ff_cfg(void)
             char *p, *q;
             ff_cfg.rotary = ROT_full;
             for (p = opts.arg; *p != '\0'; p = q) {
-                for (q = p; *q && *q != ','; q++)
-                    continue;
-                if (*q == ',')
-                    *q++ = '\0';
+                q = next_item(p, ',');
                 if (!strcmp(p, "reverse")) {
                     ff_cfg.rotary |= ROT_reverse;
                 } else if (!strcmp(p, "v2")) {
                     ff_cfg.rotary |= ROT_v2;
                 } else {
+                    const static uint8_t v[] = {
+                        ROT_quarter, ROT_half, ROT_trackball, ROT_buttons,
+                        ROT_none, ROT_full };
                     ff_cfg.rotary &= ~ROT_typemask;
-                    ff_cfg.rotary |=
-                        !strcmp(p, "quarter") ? ROT_quarter
-                        : !strcmp(p, "half") ? ROT_half
-                        : !strcmp(p, "trackball") ? ROT_trackball
-                        : !strcmp(p, "buttons") ? ROT_buttons
-                        : !strcmp(p, "none") ? ROT_none
-                        : ROT_full;
+                    ff_cfg.rotary |= v[word_index(
+                        p, "quarter\0half\0trackball\0buttons\0none\0")];
                 }
             }
             break;
@@ -1208,10 +1213,7 @@ static bool_t read_ff_cfg(void)
             char *p, *q, *r;
             ff_cfg.display_type = DISPLAY_auto;
             for (p = opts.arg; *p != '\0'; p = q) {
-                for (q = p; *q && *q != '-'; q++)
-                    continue;
-                if (*q == '-')
-                    *q++ = '\0';
+                q = next_item(p, '-');
                 if (!strcmp(p, "lcd")) {
                     ff_cfg.display_type = DISPLAY_lcd;
                 } else if (!strcmp(p, "oled")) {
@@ -1275,12 +1277,13 @@ static bool_t read_ff_cfg(void)
             cfg.ffcfg_has_display_off_secs = TRUE;
             break;
 
-        case FFCFG_display_on_activity:
-            ff_cfg.display_on_activity =
-                !strcmp(opts.arg, "no") ? DISPON_no
-                : !strcmp(opts.arg, "sel") ? DISPON_sel
-                : DISPON_yes;
+        case FFCFG_display_on_activity: {
+            const static uint8_t v[] = {
+                DISPON_no, DISPON_sel, DISPON_yes };
+            ff_cfg.display_on_activity = v[word_index(opts.arg,
+                "no\0sel\0")];
             break;
+        }
 
         case FFCFG_display_scroll_rate:
             ff_cfg.display_scroll_rate = strtol(opts.arg, NULL, 10);
@@ -1335,10 +1338,7 @@ static bool_t read_ff_cfg(void)
             char *p, *q;
             ff_cfg.notify_volume = 0;
             for (p = opts.arg; *p != '\0'; p = q) {
-                for (q = p; *q && *q != ','; q++)
-                    continue;
-                if (*q == ',')
-                    *q++ = '\0';
+                q = next_item(p, ',');
                 if (!strcmp(p, "slotnr")) {
                     ff_cfg.notify_volume |= NOTIFY_slotnr;
                 } else {
@@ -1359,7 +1359,7 @@ static bool_t read_ff_cfg(void)
             break;
 
         case FFCFG_extend_image:
-            ff_cfg.extend_image = !strcmp(opts.arg, "yes");
+            ff_cfg.extend_image = yes;
             break;
 
         }
@@ -1728,7 +1728,7 @@ static void native_update(uint8_t slot_mode)
     if (cfg.sorted) {
 
         struct native_dirent *ent = cfg.sorted[cfg.slot_nr-i];
-        snprintf(fs->fp.fname, sizeof(fs->fp.fname), ent->name);
+        snprintf(fs->fp.fname, sizeof(fs->fp.fname), "%s", ent->name);
         fs->file.obj.fs = &fatfs;
         fs->file.dir_sect = ent->dir_sect;
         fs->file.dir_ptr = fatfs.win + ent->dir_off;
@@ -2674,9 +2674,10 @@ static void folder_menu(void)
 
 static int floppy_main(void *unused)
 {
-    FRESULT fres;
+    FRESULT fres = FR_OK;
     uint8_t b;
     uint32_t i;
+    bool_t exited_empty_folder = FALSE;
 
     /* If any buttons are pressed when USB drive is mounted then we start 
      * in ejected state. */
@@ -2729,6 +2730,7 @@ static int floppy_main(void *unused)
             if (!strcmp(fs->fp.fname, "..")) {
                 if (cfg.depth == 0)
                     F_die(FR_BAD_IMAGECFG);
+                exited_empty_folder = (cfg.max_slot_nr == 0);
                 fatfs.cdir = cfg.cur_cdir = cfg.stack[--cfg.depth].cdir;
                 cfg.slot_nr = cfg.stack[cfg.depth].slot;
             } else {
@@ -2836,6 +2838,11 @@ static int floppy_main(void *unused)
             wait_ms = (cfg.slot.attributes & AM_DIR) ?
                 ff_cfg.autoselect_folder_secs : ff_cfg.autoselect_file_secs;
             wait_ms *= 1000;
+            if (exited_empty_folder) {
+                /* Do not automatically re-enter the empty folder just left. */
+                wait_ms = 0;
+                exited_empty_folder = FALSE;
+            }
             if (wait_ms && (display_type == DT_LCD_OLED)) {
                 /* Allow time for full name to scroll through. */
                 unsigned int scroll_ms = ff_cfg.nav_scroll_pause;

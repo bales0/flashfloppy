@@ -47,6 +47,7 @@ DEFINE_IRQ(dma_rdata_irq, "IRQ_rdata_dma");
 /* EXTI IRQs. */
 #define motor_irq  6
 #define wgate_irq 23
+#define rotary_irq 40
 void IRQ_6(void) __attribute__((alias("IRQ_MOTOR_changed"))); /* EXTI0 */
 void IRQ_7(void) __attribute__((alias("IRQ_WGATE_rotary"))); /* EXTI1 */
 void IRQ_23(void) __attribute__((alias("IRQ_WGATE_rotary"))); /* EXTI9_5 */
@@ -153,8 +154,9 @@ static void IRQ_WGATE_rotary(void)
     if (pr & m(pin_wgate))
         IRQ_WGATE();
 
+    /* Decode at the button timer's priority, never at WGATE priority. */
     if (pr & rot_mask)
-        IRQ_rotary();
+        IRQx_set_pending(rotary_irq);
 }
 
 static bool_t qd_ready_off_on_motor_off(void)

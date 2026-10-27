@@ -101,8 +101,8 @@ void IRQ_15(void) __attribute__((alias("IRQ_dma_rx_tc")));
 void IRQ_17(void) __attribute__((alias("IRQ_dma_rx_tc")));
 
 bool_t has_osd;
-uint8_t osd_buttons_tx;
-uint8_t osd_buttons_rx;
+volatile uint8_t osd_buttons_tx;
+volatile uint8_t osd_buttons_rx;
 #define OSD_no    0
 #define OSD_read  1
 #define OSD_write 2
@@ -249,7 +249,6 @@ static void emit8(uint8_t **p, uint8_t val, uint8_t signals)
 static unsigned int osd_prep_buffer(void)
 {
     uint16_t order = menu_mode ? 0x7903 : 0x7183;
-    char *p;
     uint8_t *q = buffer;
     unsigned int row, rows, heights;
     int i;
@@ -265,7 +264,8 @@ static unsigned int osd_prep_buffer(void)
         order = ff_cfg.osd_display_order;
 
     heights = rows = 0;
-    for (i = 3; i >= 0; i--) {
+    /* The FF OSD protocol encodes at most three text rows. */
+    for (i = 2; i >= 0; i--) {
         /* Iterate over rows, bottom to top. */
         row = order >> (i<<2);
         /* Skip all trailing empty rows. */
@@ -285,8 +285,11 @@ static unsigned int osd_prep_buffer(void)
     *q++ = OSD_BUTTONS | osd_buttons_tx;
     *q++ = OSD_DATA;
     for (row = 0; row < rows; row++) {
-        p = text[(order >> (row * DORD_shift)) & DORD_row];
-        memcpy(q, p, lcd_columns);
+        i = (order >> (row * DORD_shift)) & DORD_row;
+        if (i < ARRAY_SIZE(text))
+            memcpy(q, text[i], lcd_columns);
+        else
+            memset(q, ' ', lcd_columns);
         q += lcd_columns;
     }
 
