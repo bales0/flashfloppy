@@ -57,18 +57,20 @@ static uint8_t next_buttons(void) {
 #define DM_normal 0
 static unsigned int display_type=DT_LCD_OLED,display_mode;
 static unsigned int service_calls[4];
+static bool_t has_osd=TRUE;
 static uint8_t wait_twobutton_press(uint8_t b) { return b; }
 static bool_t main_menu_confirm(const char *s) { (void)s;return TRUE; }
 static void mcu_info(void) { service_calls[0]++; }
 static void factory_reset(void) { service_calls[1]++; }
 static void update_firmware(void) { service_calls[2]++; }
-static void ff_osd_configure(void) { service_calls[3]++; }
+static void ff_osd_configure(void) { assert(has_osd);service_calls[3]++; }
 static bool_t qd_mode;
 static unsigned int hum_refresh, interface_changes, displayed;
 static char last_value[17];
 static void delay_ms(unsigned int n) { (void)n; }
 static void lcd_write(int col,int row,int width,const char *s)
 { (void)col;(void)width; assert(strlen(s)<=16); displayed++;
+  if (!has_osd) assert(strcmp(s,"Configure FF OSD"));
   if(row==1) snprintf(last_value,sizeof(last_value),"%s",s); }
 static void lcd_on(void) {}
 static bool_t emulation_is_qd(void) { return qd_mode; }
@@ -183,6 +185,23 @@ int main(void)
         for (j=0;j<SET_nr;j++) assert(*runtime_setting(j)!=before[j]);
     }
     for (i=0;i<4;i++) assert(service_calls[i]==2);
+    /* Missing FF OSD is skipped in both directions; a present module remains accessible. */
+    {
+        uint8_t nav[64];unsigned int count=0;
+        has_osd=FALSE;
+        for(i=0;i<SET_nr+3;i++){nav[count++]=0;nav[count++]=B_RIGHT;}
+        nav[count++]=0;nav[count++]=B_SELECT;nav[count++]=0;
+        button_reads=nav;button_count=count;button_pos=0;main_menu();
+        assert(button_pos==button_count && service_calls[3]==2);
+        const uint8_t back[]={0,B_LEFT,0,B_LEFT,0,B_RIGHT,0,B_SELECT,0};
+        button_reads=back;button_count=sizeof(back);button_pos=0;main_menu();
+        assert(button_pos==button_count && service_calls[3]==2);
+        has_osd=TRUE;
+        const uint8_t present[]={0,B_LEFT,0,B_LEFT,0,B_SELECT,0,0,B_RIGHT,0,B_SELECT,0};
+        button_reads=present;button_count=sizeof(present);button_pos=0;main_menu();
+        assert(button_pos==button_count && service_calls[3]==3);
+        button_reads=NULL;
+    }
     hum_refresh=interface_changes=0;
     qd_mode=0;
     {
@@ -210,8 +229,18 @@ int main(void)
         }
         ff_cfg.notify_volume=NOTIFY_slotnr;PLAY(left,FALSE,SET_notify);
         assert(ff_cfg.notify_volume==(NOTIFY_slotnr|NOTIFY_volume_mask));
-        ff_cfg.oled_contrast=0;PLAY(left,FALSE,SET_contrast);assert(ff_cfg.oled_contrast==255);
-        PLAY(right,FALSE,SET_contrast);assert(ff_cfg.oled_contrast==0);
+        ff_cfg.oled_contrast=OLED_CONTRAST(1);
+        PLAY(left,FALSE,SET_contrast);assert(ff_cfg.oled_contrast==OLED_CONTRAST(10));
+        PLAY(right,FALSE,SET_contrast);assert(ff_cfg.oled_contrast==OLED_CONTRAST(1));
+        const uint8_t accept[]={B_SELECT};
+        for(unsigned int level=1;level<=10;level++) {
+            char label[4];snprintf(label,sizeof(label),"%u",level);
+            ff_cfg.oled_contrast=(level-1)*255/9;
+            PLAY(accept,FALSE,SET_contrast);assert(!strcmp(last_value,label));
+            PLAY(right,FALSE,SET_contrast);
+            assert(ff_cfg.oled_contrast==(level==10?0:level*255/9));
+            PLAY(left,FALSE,SET_contrast);assert(ff_cfg.oled_contrast==(level-1)*255/9);
+        }
         ff_cfg.display_off_secs=0;PLAY(left,FALSE,SET_timeout);assert(ff_cfg.display_off_secs==255);
         PLAY(left,FALSE,SET_timeout);assert(ff_cfg.display_off_secs==254);
         ff_cfg.fdd_interface=0;PLAY(left,FALSE,SET_interface);assert(ff_cfg.fdd_interface==FINTF_JC);

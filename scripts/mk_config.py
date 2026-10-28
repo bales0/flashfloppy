@@ -38,6 +38,8 @@ def main(argv):
                 val = "HOST_" + val
             elif opt == "oled-font":
                 val = "FONT_" + val
+            elif opt == "oled-contrast":
+                val = "OLED_CONTRAST(" + val + ")"
             elif opt == "display-type":
                 opts = []
                 for x in val.split("-"):

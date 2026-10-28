@@ -20,7 +20,7 @@ def function(path,name):
 (work/'ff_cfg_defaults.h').write_text('''x(step-volume,step_volume,10)
 x(qd-motor-volume,qd_motor_volume,10)
 x(notify-volume,notify_volume,3)
-x(oled-contrast,oled_contrast,127)
+x(oled-contrast,oled_contrast,OLED_CONTRAST(6))
 x(display-off-secs,display_off_secs,30)
 x(fdd-interface,fdd_interface,FINTF_JC)
 x(qd-ready,qd_ready,QD_READY_AUTO)

@@ -137,7 +137,7 @@ struct packed ff_cfg {
 #define PIN_nchg   (PIN_chg | PIN_invert)
     uint8_t fdd_pin02, fdd_pin34;
     uint8_t fdd_head_settle_ms;
-    uint8_t oled_contrast;
+    uint8_t oled_contrast; /* Native OLED byte; user-facing levels are 1..10. */
     char indexed_prefix[8];
     uint8_t _unused; /* never been used */
 #define SORT_never  0
@@ -189,6 +189,7 @@ struct packed ff_cfg {
 };
 
 extern struct ff_cfg ff_cfg;
+#define OLED_CONTRAST(level) (((level) - 1u) * 255u / 9u)
 extern const struct ff_cfg dfl_ff_cfg;
 
 /* Apple II uses fixed interface defaults, never user FDD settings. */

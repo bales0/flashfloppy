@@ -1253,9 +1253,11 @@ static bool_t __attribute__((__cold__, __noinline__)) read_ff_cfg(void)
                 : FONT_8x16;
             break;
 
-        case FFCFG_oled_contrast:
-            ff_cfg.oled_contrast = strtol(opts.arg, NULL, 10);
+        case FFCFG_oled_contrast: {
+            int level = strtol(opts.arg, NULL, 10);
+            ff_cfg.oled_contrast = OLED_CONTRAST(max(1, min(level, 10)));
             break;
+        }
 
         case FFCFG_display_order:
             ff_cfg.display_order = parse_display_order(opts.arg);
@@ -2194,9 +2196,6 @@ static int run_floppy(void *_b)
         t_prev = t_now;
     }
 
-    if (display_type == DT_LED_7SEG)
-        display_state = LED_NORMAL;
-
     return 0;
 }
 
@@ -2672,7 +2671,7 @@ static void folder_menu(void)
 static int floppy_main(void *unused)
 {
     FRESULT fres = FR_OK;
-    uint8_t b;
+    uint8_t b = 0;
     uint32_t i;
     bool_t exited_empty_folder = FALSE;
 
@@ -2764,6 +2763,8 @@ static int floppy_main(void *unused)
             floppy_arena_teardown();
             speaker_notify_insert(cfg.slot_nr);
             fres = F_call_cancellable(run_floppy, &b);
+            if (display_type == DT_LED_7SEG)
+                display_state = LED_NORMAL;
             floppy_cancel();
             speaker_notify_eject();
             assert_volume_connected();
@@ -3024,6 +3025,9 @@ static void settings_edit(unsigned int item)
         else if (item == SET_notify) {
             value &= NOTIFY_volume_mask;
             limit = NOTIFY_volume_mask;
+        } else if (item == SET_contrast) {
+            value = (stored * 9u + 127u) / 255u;
+            limit = 9;
         } else if (item == SET_interface) {
             value = stored == FINTF_JC ? 6 : stored;
             limit = 6;
@@ -3042,7 +3046,7 @@ static void settings_edit(unsigned int item)
         else if (item == SET_timeout && (!value || value == 255))
             snprintf(msg, sizeof(msg), "%s", value ? "Always On" : "Off");
         else
-            snprintf(msg, sizeof(msg), "%u%s", value,
+            snprintf(msg, sizeof(msg), "%u%s", value + (item == SET_contrast),
                      item == SET_timeout ? " sec" : "");
         lcd_write(0, 0, -1, main_menu_names[item]);
         lcd_write(0, 1, -1, msg);
@@ -3066,6 +3070,8 @@ static void settings_edit(unsigned int item)
 
         if (item == SET_notify)
             value |= stored & ~NOTIFY_volume_mask;
+        else if (item == SET_contrast)
+            value = OLED_CONTRAST(value + 1u);
         else if (item == SET_interface && value == 6)
             value = FINTF_JC;
         runtime_setting_set(item, value);
@@ -3108,10 +3114,12 @@ static void main_menu(void)
             continue;
         b = wait_twobutton_press(b);
 
-        if (b & B_LEFT)
-            sel--;
-        if (b & B_RIGHT)
-            sel++;
+        if (b & (B_LEFT | B_RIGHT)) {
+            int direction = (b & B_LEFT) ? -1 : 1;
+            sel += direction;
+            if (!has_osd && sel == SET_nr + 3)
+                sel += direction;
+        }
 
         if (b & B_SELECT) {
             /* Wait for buttons to be released. */

@@ -124,13 +124,20 @@ The flat list includes:
 
 - FDD/Apple Volume (0..20), QD Motor Volume (0..20), Notify Volume (0..15,
   preserving the slot-number notification flag).
-- OLED Contrast (0..255; applied on refresh without resetting), Display
+- OLED Contrast (1..10; applied on refresh without resetting), Display
   Timeout (0=off, 1..254 seconds, 255=always on). Menus remain visible even when
   the configured timeout is off. OLED Contrast has no effect on an HD44780 LCD.
 - FDD Interface (JC, Shugart, IBM PC, IBM PC+HD, Japanese PC,
   Japanese PC+HD, Amiga), QD READY Mode (Auto, Standard, Motor Off, JC), QD Host (Sharp, Roland, Akai, Generic).
-- The existing MCU Info, Factory Reset, Update Firmware, Configure FF OSD,
-  and Exit service entries.
+- The existing MCU Info, Factory Reset, Update Firmware and Exit service
+  entries. Configure FF OSD appears only if an external FF OSD module is detected;
+  it does not configure the Gotek's own OLED.
+
+`oled-contrast` in FF.CFG uses the same **1..10** scale, default **6**. Level 1
+is minimum and level 10 maximum hardware contrast. Values outside the range are
+clamped to its endpoints; old 0..255 CFG values are not converted. Update your
+FF.CFG accordingly. The internal OLED byte remains 0..255 and is derived from
+the level, so no persistent structure or display-driver change is needed.
 
 All eight settings are RAM overrides until reset/power-on. They never update
 FF.CFG, another settings file, or internal Flash. Normal configuration writes

@@ -62,8 +62,9 @@ int printk(const char *format, ...)
     return n;
 }
 
-void logfile_flush(FIL *file)
+static int flush(void *_file)
 {
+    FIL *file = _file;
     unsigned int nr;
     char msg[20];
 
@@ -89,6 +90,16 @@ void logfile_flush(FIL *file)
     quiesce = FALSE;
 
     F_close(file);
+    return 0;
+}
+
+void logfile_flush(FIL *file)
+{
+    /* A cancelled FAT operation must not leave subsequent loggers silenced. */
+    FRESULT fr = F_call_cancellable(flush, file);
+    quiesce = FALSE;
+    if (fr != FR_OK)
+        F_die(fr);
 }
 
 /*

@@ -67,8 +67,10 @@ prefix+='#include "'+str(root/'src/config.c')+'"\n'
 helpers=''.join(function(name) for name in ['parse_pin_str','parse_display_order'])
 if 'static char *next_item(' in (root/'src/main.c').read_text():helpers+=function('next_item')
 suffix=r'''
-int main(void){
+int main(int argc,char **argv){
     char line[2048];
+    (void)argv;
+    if(argc>1){printf("%zu\n",offsetof(struct ff_cfg,oled_contrast));return 0;}
     while(fgets(line,sizeof(line),stdin)){
         input=line;ff_cfg=dfl_ff_cfg;memset(&cfg,0,sizeof(cfg));memset(&storage,0,sizeof(storage));
         assert(read_ff_cfg());
@@ -96,10 +98,27 @@ cases=[f'{key}={value}\n' for key in names for value in values]
 cases += [f'{key}=yes\n' for key in ['interface','host','pin02','pin34','max-cyl','motor-delay','chgrst','unknown-key','QD-HOST']]
 output=subprocess.check_output([str(exe)],input=''.join(cases).encode())
 assert len(output.splitlines())==len(cases)
-digest=hashlib.sha256(output).hexdigest()
+# Check the approved contrast change independently. Restore only that byte to
+# its historical value so the original golden still protects every other field.
+contrast_offset=int(subprocess.check_output([str(exe),'offset']))*2
+normalized=[]
+for case,line in zip(cases,output.decode().splitlines()):
+    key,value=case.strip().split('=',1)
+    old=143;expected_contrast=5*255//9
+    if key=='oled-contrast':
+        match=re.match(r'^[+-]?\d+',value)
+        parsed=int(match.group(0)) if match else 0
+        old=parsed&255
+        expected_contrast=(max(1,min(parsed,10))-1)*255//9
+    assert int(line[contrast_offset:contrast_offset+2],16)==expected_contrast,case
+    normalized.append(line[:contrast_offset]+f'{old:02x}'+line[contrast_offset+2:]+'\n')
+digest=hashlib.sha256(''.join(normalized).encode()).hexdigest()
 expected='915b0b409309e4d3de64d75438dbbb7447f41dbeffc4bae8d9f84dfc687ad3f4'
 assert digest==expected,(digest,expected)
 print(f'Actual FF.CFG parser: {len(names)} keys, {len(cases)} valid/invalid cases, digest {digest}')
+print('OLED contrast: 1..10 scale/clamping checked; every other byte retains its historical golden')
+levels=subprocess.check_output([str(exe)],input=''.join(f'oled-contrast={n}\n' for n in range(1,11)).encode()).decode().splitlines()
+assert [int(line[contrast_offset:contrast_offset+2],16) for line in levels]==[(n-1)*255//9 for n in range(1,11)]
 
 # The shared parser must also preserve IMG.CFG option indices and sections.
 img=(root/'src/image/img.c').read_text()
